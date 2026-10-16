@@ -1,0 +1,38 @@
+{
+  // Next.js runs on http://localhost:3000. From the Next.js debugging guide.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Starts the dev server and opens Edge once it's ready (one click does everything).
+      "name": "Next.js: debug full stack",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/next/dist/bin/next",
+      "args": ["dev"],
+      "runtimeArgs": ["--inspect"],
+      "skipFiles": ["<node_internals>/**"],
+      "serverReadyAction": {
+        "action": "debugWithEdge",
+        "killOnServerStop": true,
+        "pattern": "- Local:.+(https?://.+)",
+        "uriFormat": "%s",
+        "webRoot": "${workspaceFolder}"
+      }
+    },
+    {
+      // Starts only the dev server, with the Node debugger attached.
+      "name": "Next.js: debug server-side",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev -- --inspect"
+    },
+    {
+      // Opens Edge on the site; start the server first (npm run dev).
+      "name": "Next.js: debug client-side",
+      "type": "msedge",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}"
+    }
+  ]
+}
