@@ -1,32 +1,16 @@
 "use client";
 
-import { DetailsDialog } from "./DetailsDialog";
 import { useSchedule } from "./ScheduleProvider";
 
 /**
- * Wraps one server-rendered card: shows or hides it for the current filters and day,
- * and opens its server-rendered details in a popup. Both arrive as props, so they stay
- * server components. The popup renders outside the hidden wrapper, so the hero can open
- * it even when the card itself isn't on screen.
+ * Wraps one server-rendered card and shows or hides it for the current filters and day.
+ * The card arrives as `children`, so it stays a server component.
  */
-export function EpisodeSlot({
-  id,
-  title,
-  details,
-  children,
-}: {
-  id: number;
-  title: string;
-  details: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  const { visibleIds, openId } = useSchedule();
+export function EpisodeSlot({ id, children }: { id: number; children: React.ReactNode }) {
+  const { visibleIds } = useSchedule();
   return (
-    <>
-      <div hidden={!visibleIds.has(id)} className="min-w-0">
-        {children}
-      </div>
-      {openId === id && <DetailsDialog title={title}>{details}</DetailsDialog>}
-    </>
+    <div hidden={!visibleIds.has(id)} className="min-w-0">
+      {children}
+    </div>
   );
 }

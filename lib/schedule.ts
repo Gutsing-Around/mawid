@@ -1,5 +1,5 @@
 import { genreLabel } from "@/lib/genres";
-import type { Episode, EpisodeSummary, FavoriteShow } from "@/lib/types";
+import type { Episode, EpisodeSummary, FavoriteShow, ShowInfo } from "@/lib/types";
 
 /** Filter state chosen in the toolbar. Empty string means "all". */
 export type Filters = {
@@ -9,24 +9,6 @@ export type Filters = {
 };
 
 export type GenreOption = { value: string; label: string };
-
-export function toSummary(episode: Episode): EpisodeSummary {
-  return {
-    id: episode.id,
-    mediaId: episode.mediaId,
-    episode: episode.episode,
-    totalEpisodes: episode.totalEpisodes,
-    airingAt: episode.airingAt,
-    title: episode.title,
-    romaji: episode.romaji,
-    genres: episode.genres,
-    mature: episode.mature,
-    cover: episode.cover,
-    coverColor: episode.coverColor,
-    banner: episode.banner,
-    platforms: episode.platforms,
-  };
-}
 
 /** What a favourite remembers about a show, so it can be listed when it isn't airing. */
 export function favoriteOf(
@@ -46,7 +28,8 @@ export function matchesFilters(episode: EpisodeSummary, filters: Filters): boole
   if (filters.genre && !episode.genres.includes(filters.genre)) return false;
   if (filters.platform && !episode.platforms.some((p) => p.site === filters.platform)) return false;
   const query = filters.query.trim().toLowerCase();
-  if (query && !`${episode.title} ${episode.romaji}`.toLowerCase().includes(query)) return false;
+  const searchable = `${episode.title} ${episode.romaji} ${episode.arabicTitle ?? ""}`.toLowerCase();
+  if (query && !searchable.includes(query)) return false;
   return true;
 }
 
@@ -62,4 +45,24 @@ export function genreOptions(episodes: Episode[]): GenreOption[] {
 export function platformOptions(episodes: Episode[]): string[] {
   const sites = new Set(episodes.flatMap((e) => e.platforms.map((p) => p.site)));
   return [...sites].sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * A show page's path: a readable slug from the title plus the AniList media ID,
+ * e.g. /anime/black-clover-season-2-195604. Only the ID is used to find the show.
+ */
+export function showPath(show: Pick<ShowInfo, "mediaId" | "title" | "romaji">): string {
+  const slug = (show.title || show.romaji)
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .slice(0, 60)
+    .replace(/^-+|-+$/g, "");
+  return `/anime/${slug ? `${slug}-` : ""}${show.mediaId}`;
+}
+
+/** The media ID at the end of a show slug, or null if there isn't one. */
+export function mediaIdFromSlug(slug: string): number | null {
+  const match = /(?:^|-)(\d+)$/.exec(slug);
+  return match ? Number(match[1]) : null;
 }

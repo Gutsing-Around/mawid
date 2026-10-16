@@ -4,7 +4,7 @@ import { AiringProgress } from "@/components/time/AiringProgress";
 import { CompactCountdown } from "@/components/time/CompactCountdown";
 import { LocalTime } from "@/components/time/LocalTime";
 import { episodeLabel } from "@/lib/format";
-import { favoriteOf } from "@/lib/schedule";
+import { favoriteOf, showPath } from "@/lib/schedule";
 import type { Episode } from "@/lib/types";
 import { FavoriteButton } from "./FavoriteButton";
 import { GenreTags } from "./GenreTags";
@@ -25,7 +25,7 @@ export function TicketCard({ episode: ep }: { episode: Episode }) {
         >
           {ep.cover && (
             <MatureCover mediaId={ep.mediaId} mature={ep.mature} size="sm">
-              <Image src={ep.cover} alt={`غلاف ${ep.title}`} fill sizes="64px" className="object-cover" />
+              <Image src={ep.cover} alt={`غلاف ${ep.title}`} width={64} height={96} className="absolute inset-0 size-full object-cover" />
             </MatureCover>
           )}
         </div>
@@ -38,6 +38,7 @@ export function TicketCard({ episode: ep }: { episode: Episode }) {
               className="relative z-10 -mt-1 shrink-0"
             />
           </div>
+          {ep.arabicTitle && <p className="text-[13px] text-ink/80">{ep.arabicTitle}</p>}
           {ep.romaji !== ep.title && (
             <p dir="ltr" className="text-right text-xs wrap-anywhere text-muted">
               {ep.romaji}
@@ -56,7 +57,7 @@ export function TicketCard({ episode: ep }: { episode: Episode }) {
         <AiringProgress airingAt={ep.airingAt} className="mt-2.5 w-4/5" />
       </div>
 
-      <OpenDetails id={ep.id} title={ep.title} />
+      <OpenDetails id={ep.id} title={ep.title} href={showPath(ep)} />
     </article>
   );
 }

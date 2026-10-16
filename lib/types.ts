@@ -13,18 +13,15 @@ export type Synopsis = {
   source: string | null;
 };
 
-/** One upcoming episode, normalized from AniList's airing schedule. */
-export type Episode = {
-  /** AniList airing-schedule ID, unique per episode. */
-  id: number;
+/** A show's own details, the same for every episode. */
+export type ShowInfo = {
   /** AniList media ID, stable across episodes of the same show. */
   mediaId: number;
-  episode: number;
   totalEpisodes: number | null;
-  /** Unix timestamp in seconds. */
-  airingAt: number;
   title: string;
   romaji: string;
+  /** The Arabic name fans use, when one exists (data/titles-ar.ts). */
+  arabicTitle: string | null;
   cover: string | null;
   coverColor: string | null;
   /** Wide banner art; not every show has one. */
@@ -37,23 +34,23 @@ export type Episode = {
   platforms: Platform[];
 };
 
-/** The slim slice of an episode the browser needs for filtering, counts, the hero and favourites. */
-export type EpisodeSummary = Pick<
-  Episode,
-  | "id"
-  | "mediaId"
-  | "episode"
-  | "totalEpisodes"
-  | "airingAt"
-  | "title"
-  | "romaji"
-  | "genres"
-  | "mature"
-  | "cover"
-  | "coverColor"
-  | "banner"
-  | "platforms"
->;
+/** A show's next episode. */
+export type NextEpisode = {
+  /** AniList airing-schedule ID, unique per episode. */
+  id: number;
+  episode: number;
+  /** Unix timestamp in seconds. */
+  airingAt: number;
+};
+
+/** One upcoming episode of a show, normalized from AniList's airing schedule. */
+export type Episode = ShowInfo & NextEpisode;
+
+/**
+ * What the browser receives for each episode: everything needed for filtering, counts,
+ * the heroes, favourites and the details popup (which is built in the browser on demand).
+ */
+export type EpisodeSummary = Episode;
 
 /** A favourited show, stored in the browser so it stays listed even when it isn't airing this week. */
 export type FavoriteShow = {

@@ -43,6 +43,7 @@ export function TicketHero() {
         <div className="relative flex min-w-0 flex-col gap-1.5">
           <p className="glow-signal font-mono text-xs font-semibold tracking-[0.2em] text-signal">● تذكرتك القادمة</p>
           <h2 className="font-display text-[clamp(22px,3.4vw,32px)] leading-tight text-balance">{next.title}</h2>
+          {next.arabicTitle && <p className="text-sm text-ink/80">{next.arabicTitle}</p>}
           <p className="text-[13px] font-semibold">{episodeLabel(next.episode, next.totalEpisodes)}</p>
           <GenreTags genres={next.genres} />
           <div className="mt-auto flex flex-wrap items-center gap-2.5 pt-2">

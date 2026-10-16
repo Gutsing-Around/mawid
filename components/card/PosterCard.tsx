@@ -2,7 +2,7 @@ import Image from "next/image";
 import { PlatformLogos } from "@/components/PlatformLogos";
 import { Countdown } from "@/components/time/Countdown";
 import { LocalTime } from "@/components/time/LocalTime";
-import { favoriteOf } from "@/lib/schedule";
+import { favoriteOf, showPath } from "@/lib/schedule";
 import type { Episode } from "@/lib/types";
 import { FavoriteButton } from "./FavoriteButton";
 import { GenreTags } from "./GenreTags";
@@ -23,9 +23,11 @@ export function PosterCard({ episode: ep }: { episode: Episode }) {
             <Image
               src={ep.cover}
               alt={`غلاف ${ep.title}`}
-              fill
-              sizes="(min-width: 1024px) 230px, (min-width: 640px) 30vw, 45vw"
-              className="object-cover"
+              // Fixed size (cards never exceed ~230px): Next.js then lists just a 1x and a 2x
+              // file instead of 8 widths, which keeps a page of 124 cards much lighter.
+              width={230}
+              height={345}
+              className="absolute inset-0 size-full object-cover"
             />
           </MatureCover>
         )}
@@ -46,13 +48,14 @@ export function PosterCard({ episode: ep }: { episode: Episode }) {
             className="relative z-10 -mt-0.5 -ms-1 shrink-0"
           />
         </div>
+        {ep.arabicTitle && <p className="line-clamp-1 text-xs text-ink/75">{ep.arabicTitle}</p>}
         <GenreTags genres={ep.genres} max={3} />
         <Countdown airingAt={ep.airingAt} format="clock" className="mt-1 font-poster text-2xl leading-tight" />
         <LocalTime airingAt={ep.airingAt} format="weekdayTime" className="text-xs text-muted" />
         <PlatformLogos platforms={ep.platforms} className="relative z-10 mt-auto pt-2" />
       </div>
 
-      <OpenDetails id={ep.id} title={ep.title} />
+      <OpenDetails id={ep.id} title={ep.title} href={showPath(ep)} />
     </article>
   );
 }

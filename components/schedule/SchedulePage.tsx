@@ -1,12 +1,12 @@
 import { PosterCard } from "@/components/card/PosterCard";
-import { ShowDetails } from "@/components/card/ShowDetails";
 import { TicketCard } from "@/components/card/TicketCard";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { Toolbar } from "@/components/Toolbar";
 import { getSchedule } from "@/lib/anilist";
-import { genreOptions, platformOptions, toSummary } from "@/lib/schedule";
+import { genreOptions, platformOptions } from "@/lib/schedule";
 import { DayTabs } from "./DayTabs";
+import { DetailsHost } from "./DetailsHost";
 import { EpisodeSlot } from "./EpisodeSlot";
 import { GridStatus } from "./GridStatus";
 import { PosterHero } from "./PosterHero";
@@ -23,8 +23,8 @@ const GRID = {
 };
 
 /**
- * The schedule in one of its layouts. Every card for the week, and its details, is
- * rendered here on the server; EpisodeSlot only decides what's visible and open.
+ * The schedule in one of its layouts. Every card for the week is rendered here on the
+ * server; EpisodeSlot only decides what's visible, and DetailsHost builds the popup on demand.
  * The "auto" view renders both card styles and lets CSS show the right one, so phones
  * get tickets from the first paint with no layout flash (hidden images aren't loaded).
  */
@@ -32,7 +32,7 @@ export async function SchedulePage({ view }: { view: ScheduleView }) {
   const { episodes, generatedAt } = await getSchedule();
 
   return (
-    <ScheduleProvider episodes={episodes.map(toSummary)} generatedAt={generatedAt}>
+    <ScheduleProvider episodes={episodes} generatedAt={generatedAt}>
       <Header episodeCount={episodes.length} />
       {view === "posters" && <PosterHero />}
       {view === "auto" && (
@@ -55,12 +55,7 @@ export async function SchedulePage({ view }: { view: ScheduleView }) {
           <DayTabs />
           <div className={GRID[view]}>
             {episodes.map((episode) => (
-              <EpisodeSlot
-                key={episode.id}
-                id={episode.id}
-                title={episode.title}
-                details={<ShowDetails episode={episode} />}
-              >
+              <EpisodeSlot key={episode.id} id={episode.id}>
                 {view === "posters" && <PosterCard episode={episode} />}
                 {view === "tickets" && <TicketCard episode={episode} />}
                 {view === "auto" && (
@@ -81,6 +76,7 @@ export async function SchedulePage({ view }: { view: ScheduleView }) {
 
         <Footer />
       </main>
+      <DetailsHost />
     </ScheduleProvider>
   );
 }

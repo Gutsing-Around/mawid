@@ -3,17 +3,23 @@ import { PlatformLogos } from "@/components/PlatformLogos";
 import { Countdown } from "@/components/time/Countdown";
 import { LocalTime } from "@/components/time/LocalTime";
 import { episodeLabel } from "@/lib/format";
-import { favoriteOf } from "@/lib/schedule";
+import { favoriteOf, showPath } from "@/lib/schedule";
 import type { Episode } from "@/lib/types";
 import { FavoriteButton } from "./FavoriteButton";
 import { GenreTags } from "./GenreTags";
 import { MatureCover } from "./MatureCover";
+import { ReminderButton } from "./ReminderButton";
 import { SeasonProgress } from "./SeasonProgress";
+import { SynopsisBlock } from "./SynopsisBlock";
 
-/** Content of the details popup: art, genres, the synopsis with its official source, and where to watch. */
+/**
+ * Content of the details popup: art, genres, the synopsis with its official source, where
+ * to watch, a reminder and a link to the full show page. Rendered in the browser from the
+ * episode data the page already has, so no per-show HTML is sent up front.
+ */
 export function ShowDetails({ episode: ep }: { episode: Episode }) {
   const art = ep.banner ?? ep.cover;
-  const { synopsis } = ep;
+  const path = showPath(ep);
   const mature = ep.mature;
 
   return (
@@ -47,6 +53,7 @@ export function ShowDetails({ episode: ep }: { episode: Episode }) {
           </div>
           <div className="min-w-0 pb-1">
             <h2 className="font-display text-xl leading-snug text-balance sm:text-2xl">{ep.title}</h2>
+            {ep.arabicTitle && <p className="text-sm text-ink/80">{ep.arabicTitle}</p>}
             {ep.romaji !== ep.title && (
               <p dir="ltr" className="text-right text-xs wrap-anywhere text-muted">
                 {ep.romaji}
@@ -66,38 +73,20 @@ export function ShowDetails({ episode: ep }: { episode: Episode }) {
           {ep.totalEpisodes ? <SeasonProgress episode={ep.episode} total={ep.totalEpisodes} /> : null}
         </div>
 
-        <section aria-labelledby={`story-${ep.id}`} className="flex flex-col gap-2">
-          <h3 id={`story-${ep.id}`} className="font-display text-base">القصة</h3>
-          {synopsis ? (
-            <>
-              <div
-                dir={synopsis.lang === "ar" ? "rtl" : "ltr"}
-                className={`flex flex-col gap-2 text-[14.5px] leading-loose ${synopsis.lang === "en" ? "text-left text-ink/90" : ""}`}
-              >
-                {synopsis.text.split(/\n{2,}/).map((paragraph, i) => (
-                  <p key={i} className="whitespace-pre-line">{paragraph}</p>
-                ))}
-              </div>
-              <p className="text-xs text-muted">
-                {synopsis.lang === "en" && "الوصف العربي قيد الإعداد، وهذا هو الوصف الرسمي بالإنجليزية. "}
-                {synopsis.source ? `المصدر: ${synopsis.source}` : "المصدر: AniList"}
-              </p>
-            </>
-          ) : (
-            <p className="text-sm text-muted">لا يتوفر وصف لهذا العمل بعد.</p>
-          )}
-        </section>
+        <SynopsisBlock synopsis={ep.synopsis} id={`story-${ep.id}`} />
 
         <section className="flex flex-col gap-2">
           <h3 className="font-display text-base">شاهد على</h3>
           <PlatformLogos platforms={ep.platforms} size="lg" />
         </section>
 
-        <FavoriteButton
-          show={favoriteOf(ep)}
-          variant="full"
-          className="self-start"
-        />
+        <div className="flex flex-wrap items-center gap-2.5">
+          <FavoriteButton show={favoriteOf(ep)} variant="full" />
+          <ReminderButton title={ep.title} episode={ep.episode} airingAt={ep.airingAt} path={path} />
+          <a href={path} className="ms-auto text-sm font-semibold text-accent hover:underline">
+            صفحة العمل ←
+          </a>
+        </div>
       </div>
     </div>
   );

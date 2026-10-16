@@ -19,8 +19,9 @@ Stack: Next.js 16 App Router (`cacheComponents: true`), React 19, TypeScript, Ta
 - `/`: picks the layout by screen width with CSS (`SchedulePage view="auto"`): **tickets** on phones, **posters** from the `md` breakpoint up. Both card styles are server-rendered and the hidden one is `display:none` (its lazy images never load), so there is no layout flash.
 - `/posters`: always **posters**. A full-width hero shows the next episode over its banner art with a big red countdown, followed by a grid of tall poster cards. Canonical URL `/`.
 - `/tickets`: always **tickets**. Each episode is a cinema ticket whose perforated stub holds the time and countdown. Canonical URL `/`.
+- `/anime/[slug]`: a **show page** per show (`showPath()`: readable slug + AniList media ID, e.g. `/anime/black-clover-season-2-195604`). Hero with art, Arabic + English titles, countdown, favourite and reminder buttons; the story; platform logos; TVSeries JSON-LD and per-show metadata. Shows airing this week are prerendered from the cached schedule (no extra AniList requests); other IDs are fetched on first visit and cached; outdated slugs redirect; unknown IDs 404.
 - `/my-list`: **قائمتي**, the visitor's favourite shows with their next episode. Not indexed.
-- Clicking a card, or "التفاصيل والقصة" in a hero, opens a **details popup**: art, genres, episode info, the synopsis with its official source, platform logos, and a favourite button.
+- Clicking a card, or "التفاصيل والقصة" in a hero, opens a **details popup**: art, Arabic title, genres, episode info, the synopsis with its official source, platform logos, favourite and reminder buttons, and a link to the show page. Card links are real `<a href>`s to the show page (crawlable; Ctrl/middle-click opens the page), and a plain click opens the popup instead.
 
 ## Structure
 
@@ -31,6 +32,7 @@ app/
   posters/page.tsx  Posters layout
   tickets/page.tsx  Tickets layout
   my-list/page.tsx  Favourites page
+  anime/[slug]/page.tsx  Show pages: generateStaticParams, generateMetadata, slug redirect
   globals.css       Dark-only theme tokens, glow and ticket utilities, exposed to Tailwind with @theme
   error.tsx         Arabic error screen with retry (shown when AniList fails)
   robots.ts, sitemap.ts, manifest.ts
@@ -45,6 +47,7 @@ lib/
   platforms.ts      Platform → brand colour + logo path (Simple Icons, CC0) or wordmark; generated logo data
   format.ts         Arabic counting rules, countdown/clock text, Intl formatters, local day keys
 data/
+  titles-ar.ts      Arabic show names fans actually use (only established names; others left out)
   descriptions.ts   Hand-written Arabic synopses keyed by AniList media ID; these override everything
   synopses-ar.ts    Prepared Arabic synopses (adapted from AniList's English text) for the October 2026 shows
 hooks/
@@ -62,10 +65,13 @@ components/
   schedule/ScheduleProvider.tsx     Client context: filters, selected day, visibleIds, nextId, open popup
   schedule/EpisodeSlot.tsx          Client: shows/hides a server-rendered card; renders its popup when open
   schedule/DetailsDialog.tsx        Client: native modal <dialog> (Escape, backdrop click, ✕)
+  schedule/DetailsHost.tsx          Client: the single popup, built in the browser for the open episode
+  show/ShowPage.tsx                 Server: the show page layout
   schedule/PosterHero.tsx, TicketHero.tsx, CountdownBoxes.tsx   Client: the two heroes and their countdown
   schedule/DayTabs.tsx, GridStatus.tsx                          Client: day pills, empty state
-  card/PosterCard.tsx, TicketCard.tsx, ShowDetails.tsx, GenreTags.tsx, SeasonProgress.tsx   Server
-  card/OpenDetails.tsx, FavoriteButton.tsx, MatureCover.tsx     Client
+  card/PosterCard.tsx, TicketCard.tsx, GenreTags.tsx, SeasonProgress.tsx   Server
+  card/OpenDetails.tsx, FavoriteButton.tsx, MatureCover.tsx, ReminderButton.tsx   Client
+  card/ShowDetails.tsx, SynopsisBlock.tsx                       Plain components shared by the popup (browser) and the show page (server)
   favorites/FavoritesList.tsx       Client: the قائمتي list
   time/Countdown.tsx, LocalTime.tsx, TimeZoneNote.tsx           Client
   time/CompactCountdown.tsx, AiringProgress.tsx                 Client: ticket stub countdown (08س 40د 12ث) and progress line
@@ -91,14 +97,19 @@ reference/
 
 **Server vs client**
 - Default to server components. Only use a client component when the UI depends on something the server can't know: the visitor's time zone, the current time, localStorage, or interaction.
-- Every card for the week, and its `ShowDetails`, is rendered on the server in `SchedulePage` and passed to `EpisodeSlot` as `children`/`details`, so both stay server components. `EpisodeSlot` only toggles `hidden` and mounts the dialog. The dialog renders outside the hidden wrapper, so a hero can open the popup of a card that isn't on screen.
+- Every card for the week is rendered on the server in `SchedulePage` and passed to `EpisodeSlot` as `children` (stays a server component); `EpisodeSlot` only toggles `hidden`.
+- The details popup is **not** pre-rendered per card: `DetailsHost` builds it in the browser for the open episode from the `Episode` data the provider already has (synopsis and Arabic title included). This keeps pages light; don't reintroduce per-card server-rendered details.
+- Card cover images use fixed `width`/`height` (not `fill` + `sizes`), so Next.js emits a 1x/2x srcset instead of 8 widths. Keep it that way for anything repeated per card.
 - Don't close a native <dialog> in an effect cleanup: React's development Strict Mode runs effects twice, and the `close` event would immediately unmount the popup.
 - Things derived from the clock that change rarely (the next episode, the favourites cutoff) use `useClock(selector)` with a primitive result, so they re-render only when the value changes.
 - Time-zone handling: the server render and hydration use `SITE.defaultTimeZone` (Asia/Riyadh) and the schedule's `generatedAt` as "now", so crawlers see real, visible content. After hydration, `timeZone` switches to the visitor's own.
   - Read the zone from `useSchedule().timeZone` and pass it to the `format*` helpers.
   - Never call `Date.now()` during render.
 - All countdowns share the single ticker in `hooks/useNow.ts`. Don't add per-component intervals.
+- Search also matches Arabic titles.
 - Filtering (search, genre, platform) goes through `matchesFilters` in `lib/schedule.ts`, so cards, tab counts, the hero and the empty state always agree.
+- Show pages read data with `getShow(mediaId)`: from the cached schedule when the show airs this week, otherwise one cached AniList `Media` query. Build show URLs only with `showPath()`; `mediaIdFromSlug()` reads the ID back.
+- Reminders (`ReminderButton`) are client-only: a prefilled Google Calendar link and a downloadable .ics (UTC times, 10-minute alert). No server or accounts.
 - Favourites are stored as `FavoriteShow` objects (media ID, title, cover, colour), so `/my-list` can list shows even when they aren't airing this week. Use `useFavorites()`; don't read the key directly.
 
 **Mature content**
@@ -136,7 +147,7 @@ reference/
 - All SEO copy lives in `lib/site.ts`. The site URL comes from `NEXT_PUBLIC_SITE_URL`, falling back to Vercel's production URL. Search-console codes come from `GOOGLE_SITE_VERIFICATION` and `BING_SITE_VERIFICATION`.
 - Keep content visible in the server HTML. Don't hide content behind client-only rendering.
 - Heading order: one sr-only `h1` per schedule page (visible "قائمتي" on `/my-list`), then `h2` for sections and the hero title, then `h3` for cards.
-- `/posters` and `/tickets` are canonical to `/`; `/my-list` is `noindex`. The sitemap lists `/` only.
+- `/posters` and `/tickets` are canonical to `/`; `/my-list` is `noindex`. The sitemap lists `/` plus every show page airing this week. Show pages have a visible `h1` (Arabic name when known) and their own title/description/OG image.
 - The OG image and icons are static files rendered from HTML with headless Edge. `next/og` doesn't shape Arabic text reliably, so if they change, regenerate them the same way.
 
 **Deployment**
@@ -144,6 +155,9 @@ reference/
 - The domain was bought on Vercel (auto-renew on) and uses Vercel DNS. `www` is the primary address; `mawidanime.com` redirects to it with a 308.
 - Google Search Console is verified with a DNS TXT record in Vercel → Domains → mawidanime.com. Don't delete it.
 - Vercel production env: `NEXT_PUBLIC_SITE_URL=https://www.mawidanime.com` (type Config). Env changes need a redeploy.
+
+**Analytics**
+- Vercel Web Analytics and Speed Insights (`@vercel/analytics`, `@vercel/speed-insights`) are mounted in `app/layout.tsx`; both are cookie-free. They must also be enabled in the Vercel dashboard.
 
 **Environment variables**
 - `NEXT_PUBLIC_SITE_URL`: the production URL.

@@ -40,6 +40,7 @@ export function PosterHero() {
             >
               {next.title}
             </h2>
+            {next.arabicTitle && <p className="mb-1 font-display text-xl text-ink/85">{next.arabicTitle}</p>}
             <p className="text-muted">
               <b className="font-semibold text-ink">{episodeLabel(next.episode, next.totalEpisodes)}</b>
               {" · "}
