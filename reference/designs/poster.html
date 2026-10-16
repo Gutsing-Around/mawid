@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>موعد الحلقة: ملصقات</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Reem+Kufi:wght@500;700&display=swap">
+<link rel="stylesheet" href="shared.css">
+<style>
+/* Design 1: posters. A bold hero over the show's banner art, then tall poster cards. */
+:root { --poster: "Anton", "Reem Kufi", sans-serif; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-inline: 20px; }
+
+.topbar { border-bottom: 1px solid var(--line); }
+.topbar .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.brand { font-family: var(--display); font-size: 26px; font-weight: 700; text-decoration: none; }
+.airing { font-family: var(--mono); font-size: 12px; letter-spacing: .2em; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.airing::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--signal); box-shadow: 0 0 10px var(--signal); }
+
+.hero { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); }
+.hero-bg { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: .45;
+  -webkit-mask-image: linear-gradient(to right, #000 0%, transparent 75%); mask-image: linear-gradient(to right, #000 0%, transparent 75%); }
+.hero .wrap { position: relative; padding-block: 56px 48px; }
+.kicker { font-family: var(--mono); font-size: 12px; letter-spacing: .25em; font-weight: 600; }
+.hero h1 { font-family: var(--poster); font-weight: 400; font-size: clamp(36px, 6vw, 72px); line-height: 1.02; margin: 12px 0 6px;
+  max-width: 16ch; text-wrap: balance; direction: ltr; text-align: right; text-transform: uppercase; }
+.hero .sub { color: var(--muted); }
+.hero .sub b { color: var(--ink); font-weight: 600; }
+
+.big { display: flex; gap: clamp(10px, 2.5vw, 22px); margin-top: 26px; }
+.big .box { width: clamp(70px, 18vw, 116px); padding: 14px 0 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: rgb(14 12 12 / .75); text-align: center; backdrop-filter: blur(4px); }
+.big .num { display: block; font-family: var(--poster); font-weight: 400; font-size: clamp(36px, 7vw, 60px); line-height: 1;
+  color: var(--signal); text-shadow: 0 0 12px rgb(255 46 62 / .8), 0 0 32px rgb(255 46 62 / .35); }
+.big .lab { display: block; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.hero .watch { margin-top: 22px; display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px; padding-block: 22px; }
+.search { flex: 1 1 260px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 11px 14px; }
+.search:focus { outline: none; border-color: var(--signal); box-shadow: 0 0 0 1px var(--signal), 0 0 14px rgb(255 46 62 / .3); }
+.btn { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 16px; cursor: pointer; font-weight: 600; }
+.btn[aria-pressed="true"] { border-color: var(--signal); color: var(--signal); text-shadow: 0 0 10px rgb(255 46 62 / .6); }
+.days { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 18px; }
+.days button { flex: none; background: none; border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer; color: var(--muted); }
+.days button[aria-pressed="true"] { color: var(--ink); border-color: var(--signal); box-shadow: 0 0 12px rgb(255 46 62 / .35); }
+.days small { font-family: var(--mono); margin-inline-start: 6px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(200px, 45%), 1fr)); gap: 16px; padding-bottom: 40px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column;
+  transition: transform .2s, border-color .2s, box-shadow .2s; }
+.card:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--c) 70%, transparent);
+  box-shadow: 0 10px 30px -10px color-mix(in srgb, var(--c) 60%, transparent); }
+.poster { position: relative; aspect-ratio: 2 / 3; background: var(--c); }
+.poster img { width: 100%; height: 100%; object-fit: cover; }
+.poster::after { content: ""; position: absolute; inset: 55% 0 0; background: linear-gradient(transparent, var(--surface)); }
+.ep { position: absolute; top: 10px; right: 10px; z-index: 1; font: 600 11px/1 var(--mono); padding: 5px 7px; border-radius: 4px;
+  background: rgb(0 0 0 / .75); border: 1px solid rgb(255 255 255 / .12); }
+.poster .star { position: absolute; top: 6px; left: 6px; z-index: 1; width: 32px; height: 32px; border-radius: 50%; background: rgb(0 0 0 / .6); }
+.body { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.body h3 { margin: 0; font-size: 14px; font-weight: 700; line-height: 1.35; direction: ltr; text-align: right;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.body .cd { font-family: var(--poster); font-size: 24px; line-height: 1.1; letter-spacing: .02em; }
+.body .when { font-size: 12px; color: var(--muted); }
+.body .logos { margin-top: auto; padding-top: 6px; }
+.empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 60px 0; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wrap">
+  <a class="brand" href="#">موعد <span class="glow">الحلقة</span></a>
+  <span class="airing" id="airing"></span>
+</div></header>
+
+<section class="hero" id="hero"></section>
+
+<main class="wrap">
+  <div class="controls">
+    <input class="search" id="q" type="search" placeholder="ابحث عن أنمي…" aria-label="ابحث عن أنمي">
+    <button class="btn" id="favs" aria-pressed="false">★ قائمتي</button>
+  </div>
+  <nav class="days" id="days" aria-label="الأيام"></nav>
+  <section class="grid" id="grid" aria-live="polite"></section>
+</main>
+
+<script src="data.js"></script>
+<script src="shared.js"></script>
+<script>
+const { items, esc, star, logos, boxes, time, weekdayTime, dayKey, days, favs, nowSec, count } = Mawid;
+const state = { q: "", onlyFavs: false, day: days()[0]?.key };
+
+document.getElementById("airing").textContent = `${count(items.length, "ep")} هذا الأسبوع`;
+
+function renderHero() {
+  const next = items.find((i) => i.airingAt > nowSec());
+  if (!next) return;
+  document.getElementById("hero").innerHTML = `
+    <div class="hero-bg" style="background-image:url('${esc(next.banner || next.cover)}')"></div>
+    <div class="wrap">
+      <div class="kicker glow">● الحلقة القادمة</div>
+      <h1>${esc(next.title)}</h1>
+      <div class="sub"><b>الحلقة ${next.episode}${next.total ? ` من ${next.total}` : ""}</b> · ${weekdayTime(next.airingAt)}</div>
+      ${boxes(next.airingAt, "big")}
+      <div class="watch">شاهدها على ${logos(next.platforms, "lg")}</div>
+    </div>`;
+}
+
+function renderDays() {
+  const visible = filtered(false);
+  document.getElementById("days").innerHTML = days().map((d) => `<button data-day="${d.key}" aria-pressed="${d.key === state.day}">
+    ${d.label} <small>${visible.filter((i) => dayKey(i.airingAt) === d.key).length}</small></button>`).join("");
+}
+
+function filtered(byDay = true) {
+  const q = state.q.trim().toLowerCase();
+  return items.filter((i) => (!byDay || dayKey(i.airingAt) === state.day)
+    && (!state.onlyFavs || favs.has(i.mediaId))
+    && (!q || `${i.title} ${i.romaji}`.toLowerCase().includes(q)));
+}
+
+function renderGrid() {
+  const list = filtered();
+  document.getElementById("grid").innerHTML = list.length ? list.map((i) => `
+    <article class="card" style="--c:${i.color || "#262222"}">
+      <div class="poster">
+        <img src="${esc(i.cover)}" alt="غلاف ${esc(i.title)}" loading="lazy">
+        <span class="ep">الحلقة ${i.episode}</span>
+        ${star(i)}
+      </div>
+      <div class="body">
+        <h3>${esc(i.title)}</h3>
+        <div class="cd" data-cd="${i.airingAt}" data-mode="clock"></div>
+        <div class="when">${weekdayTime(i.airingAt)}</div>
+        ${logos(i.platforms)}
+      </div>
+    </article>`).join("") : `<p class="empty">لا توجد حلقات هنا.</p>`;
+  Mawid.tick();
+}
+
+document.getElementById("q").addEventListener("input", (e) => { state.q = e.target.value; renderDays(); renderGrid(); });
+document.getElementById("favs").addEventListener("click", (e) => {
+  state.onlyFavs = !state.onlyFavs; e.currentTarget.setAttribute("aria-pressed", state.onlyFavs); renderDays(); renderGrid();
+});
+document.getElementById("days").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-day]"); if (!b) return; state.day = b.dataset.day; renderDays(); renderGrid();
+});
+document.addEventListener("mawid:favs", () => { if (state.onlyFavs) { renderDays(); renderGrid(); } });
+
+renderHero(); renderDays(); renderGrid(); Mawid.nav("poster.html");
+</script>
+</body>
+</html>

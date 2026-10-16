@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>موعد الحلقة: أضواء</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Reem+Kufi:wght@500;700&display=swap">
+<link rel="stylesheet" href="shared.css">
+<style>
+/* Design 3: spotlight. Full-bleed hero, a 24-hour timeline for today, a carousel of what's next, then a compact list. */
+.wrap { max-width: 1200px; margin: 0 auto; padding-inline: 20px; }
+
+.hero { position: relative; min-height: min(78vh, 680px); display: flex; flex-direction: column; overflow: hidden; }
+.hero .art { position: absolute; inset: 0; background-size: cover; background-position: center 30%; transform: scale(1.04); }
+.hero .shade { position: absolute; inset: 0; background:
+  linear-gradient(to top, var(--bg) 0%, rgb(10 9 9 / .85) 35%, rgb(10 9 9 / .6) 70%, rgb(10 9 9 / .75) 100%),
+  linear-gradient(to left, rgb(10 9 9 / .85) 0%, transparent 70%); }
+.hero > .wrap { position: relative; width: 100%; }
+.bar { display: flex; justify-content: space-between; align-items: center; height: 68px; }
+.brand { font-family: var(--display); font-size: 26px; font-weight: 700; }
+.clock { font: 600 14px var(--mono); color: var(--ink); text-shadow: 0 1px 6px rgb(0 0 0 / .8); }
+.hero .content { margin-top: auto; padding-bottom: 44px; }
+.kicker { font: 600 12px/1 var(--mono); letter-spacing: .25em; }
+.hero h1 { font-family: var(--display); font-size: clamp(32px, 5.5vw, 64px); line-height: 1.1; margin: 14px 0 8px; max-width: 18ch; text-wrap: balance; }
+.hero .meta { color: rgb(244 241 241 / .75); }
+.cdline { display: flex; flex-wrap: wrap; gap: 8px clamp(18px, 4vw, 44px); margin: 26px 0; }
+.cdline .box { display: flex; align-items: baseline; gap: 8px; }
+.cdline .num { font: 600 clamp(38px, 6vw, 64px)/1 var(--mono); color: var(--signal); text-shadow: 0 0 14px rgb(255 46 62 / .8), 0 0 36px rgb(255 46 62 / .35); }
+.cdline .lab { color: var(--muted); font-size: 14px; }
+.watch { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.watch span { color: var(--muted); font-size: 14px; }
+
+section.block { margin-top: 44px; }
+.block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.block-head h2 { font-family: var(--display); font-size: 22px; margin: 0; }
+.block-head small { font: 500 12px var(--mono); color: var(--muted); }
+
+/* 24-hour timeline */
+.timeline { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.track { position: relative; min-width: 1440px; height: 196px; }
+.hour { position: absolute; top: 0; bottom: 0; border-inline-start: 1px solid var(--line); }
+.hour span { position: absolute; bottom: 8px; inset-inline-start: 6px; font: 500 11px var(--mono); color: var(--muted); white-space: nowrap; }
+.mark { position: absolute; transform: translateX(50%); display: flex; flex-direction: column; align-items: center; gap: 3px; text-decoration: none; }
+.mark img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid var(--c); box-shadow: 0 0 12px color-mix(in srgb, var(--c) 50%, transparent); }
+.mark span { font: 500 10px var(--mono); color: var(--muted); }
+.mark:hover img { transform: scale(1.12); }
+.mark.aired { opacity: .4; }
+.now { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--signal); box-shadow: 0 0 10px var(--signal), 0 0 22px rgb(255 46 62 / .5); transform: translateX(50%); }
+.now::before { content: "الآن"; position: absolute; top: 6px; inset-inline-start: 6px; font: 600 11px var(--mono); color: var(--signal); }
+
+/* "Coming up" carousel */
+.rail { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(280px, 1fr); gap: 14px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x mandatory; }
+.wide { scroll-snap-align: start; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.wide .pic { position: relative; aspect-ratio: 16 / 8; background: var(--c) center / cover; }
+.wide .pic::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, var(--surface), transparent 60%); }
+.wide .pic .star { position: absolute; top: 6px; left: 6px; z-index: 1; background: rgb(0 0 0 / .55); border-radius: 50%; width: 32px; height: 32px; }
+.wide .txt { padding: 0 14px 14px; margin-top: -26px; position: relative; display: flex; flex-direction: column; gap: 6px; }
+.wide h3 { margin: 0; font-size: 15px; line-height: 1.35; }
+.wide .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.wide [data-cd] { font: 600 13px var(--mono); color: var(--ink); }
+
+/* Compact list for later */
+.rows { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.r { display: grid; grid-template-columns: 76px 36px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--surface); }
+.r:first-child { border-top: 0; }
+.r .t { font: 600 14px var(--mono); }
+.r .t small { display: block; font: 400 11px var(--body); color: var(--muted); }
+.r img { width: 36px; height: 50px; border-radius: 4px; object-fit: cover; }
+.r h3 { margin: 0; font-size: 14px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r .sub { font-size: 12px; color: var(--muted); }
+.r .end { display: flex; align-items: center; gap: 12px; }
+.r [data-cd] { font: 600 12px var(--mono); min-width: 9.5em; text-align: left; }
+@media (max-width: 720px) {
+  .r { grid-template-columns: 60px 36px minmax(0, 1fr); }
+  .r .end { grid-column: 3; justify-content: space-between; }
+  .r [data-cd] { min-width: 0; }
+}
+</style>
+</head>
+<body>
+<header class="hero" id="hero"></header>
+<main class="wrap">
+  <section class="block">
+    <div class="block-head"><h2>اليوم على الخط الزمني</h2><small id="tz"></small></div>
+    <div class="timeline"><div class="track" id="track"></div></div>
+  </section>
+  <section class="block">
+    <div class="block-head"><h2>خلال الساعات القادمة</h2><small>اسحب لرؤية المزيد</small></div>
+    <div class="rail" id="rail"></div>
+  </section>
+  <section class="block">
+    <div class="block-head"><h2>لاحقًا هذا الأسبوع</h2></div>
+    <div class="rows" id="rows"></div>
+  </section>
+</main>
+
+<script src="data.js"></script>
+<script src="shared.js"></script>
+<script>
+const { items, esc, star, logos, boxes, time, weekday, weekdayTime, dayKey, hourOfDay, genres, nowSec, pad2 } = Mawid;
+const now = nowSec();
+const next = items.find((i) => i.airingAt > now);
+
+document.getElementById("hero").innerHTML = `
+  <div class="art" style="background-image:url('${esc(next.banner || next.cover)}')"></div>
+  <div class="shade"></div>
+  <div class="wrap bar"><span class="brand">موعد <span class="glow">الحلقة</span></span><span class="clock" id="clock"></span></div>
+  <div class="wrap content">
+    <div class="kicker glow">● الحلقة القادمة</div>
+    <h1>${esc(next.title)}</h1>
+    <div class="meta">الحلقة ${next.episode}${next.total ? ` من ${next.total}` : ""} · ${weekdayTime(next.airingAt)} · ${genres(next.genres).slice(0, 3).join(" · ")}</div>
+    ${boxes(next.airingAt, "cdline")}
+    <div class="watch"><span>شاهدها على</span>${logos(next.platforms, "lg")}</div>
+  </div>`;
+
+// Timeline: today's episodes placed by local hour; overlapping covers are stacked into lanes.
+const today = items.filter((i) => dayKey(i.airingAt) === dayKey(now));
+const lanes = [];
+const marks = today.map((i) => {
+  const pos = (hourOfDay(i.airingAt) / 24) * 100;
+  let lane = lanes.findIndex((end) => pos - end > 3.6);
+  if (lane === -1) { lane = lanes.length; lanes.push(pos); } else lanes[lane] = pos;
+  return `<a class="mark ${i.airingAt + 1800 < now ? "aired" : ""}" href="#r-${i.id}" title="${esc(i.title)}"
+    style="inset-inline-start:${pos}%;top:${12 + lane * 56}px;--c:${i.color || "#8e8888"}">
+    <img src="${esc(i.cover)}" alt="${esc(i.title)}"><span>${time(i.airingAt)}</span></a>`;
+});
+const hours = Array.from({ length: 8 }, (_, k) => {
+  const h = k * 3, label = new Intl.DateTimeFormat("ar-u-nu-latn", { hour: "numeric" }).format(new Date(2000, 0, 1, h));
+  return `<div class="hour" style="inset-inline-start:${(h / 24) * 100}%"><span>${label}</span></div>`;
+});
+const track = document.getElementById("track");
+track.innerHTML = hours.join("") + marks.join("") + `<div class="now" id="now"></div>`;
+track.style.height = `${Math.max(196, 40 + lanes.length * 56 + 24)}px`;
+document.getElementById("tz").textContent = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+// Coming up (next 24 hours) and later
+const soon = items.filter((i) => i.airingAt > now && i.airingAt < now + 86400 && i !== next).slice(0, 10);
+document.getElementById("rail").innerHTML = soon.map((i) => `
+  <article class="wide" style="--c:${i.color || "#262222"}">
+    <div class="pic" style="background-image:url('${esc(i.banner || i.cover)}')">${star(i)}</div>
+    <div class="txt">
+      <h3>${esc(i.title)}</h3>
+      <div class="row"><span>الحلقة ${i.episode} · ${time(i.airingAt)}</span><span data-cd="${i.airingAt}"></span></div>
+      ${logos(i.platforms)}
+    </div>
+  </article>`).join("");
+
+const later = items.filter((i) => i.airingAt >= now + 86400 || (i.airingAt > now && !soon.includes(i) && i !== next));
+document.getElementById("rows").innerHTML = later.map((i) => `
+  <div class="r" id="r-${i.id}">
+    <div class="t">${time(i.airingAt)}<small>${weekday(i.airingAt)}</small></div>
+    <img src="${esc(i.cover)}" alt="" loading="lazy">
+    <div><h3>${esc(i.title)}</h3><div class="sub">الحلقة ${i.episode}${i.total ? ` من ${i.total}` : ""}</div></div>
+    <div class="end"><span data-cd="${i.airingAt}"></span>${logos(i.platforms)}</div>
+  </div>`).join("");
+
+// Live clock + moving "now" line
+document.addEventListener("mawid:tick", (e) => {
+  const t = e.detail;
+  document.getElementById("clock").textContent = new Intl.DateTimeFormat("ar-u-nu-latn", { hour: "numeric", minute: "2-digit", second: "2-digit" }).format(t * 1000);
+  document.getElementById("now").style.insetInlineStart = `${(hourOfDay(t) / 24) * 100}%`;
+});
+Mawid.tick(); Mawid.nav("spotlight.html");
+</script>
+</body>
+</html>
