@@ -11,7 +11,7 @@ const jsonLd = {
   inLanguage: "ar",
 };
 
-/** The main layout: posters. */
+/** Home: tickets on phones, posters on larger screens. */
 export default function Home() {
   return (
     <>
@@ -20,7 +20,7 @@ export default function Home() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
       />
       <h1 className="sr-only">{SITE.title}</h1>
-      <SchedulePage view="posters" />
+      <SchedulePage view="auto" />
     </>
   );
 }

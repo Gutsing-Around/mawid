@@ -16,8 +16,9 @@ Stack: Next.js 16 App Router (`cacheComponents: true`), React 19, TypeScript, Ta
 
 ## Pages
 
-- `/`: the main layout, **posters**. A full-width hero shows the next episode over its banner art with a big red countdown, followed by a grid of tall poster cards.
-- `/tickets`: the alternative layout, **tickets**. Each episode is a cinema ticket whose perforated stub holds the time and countdown. Its canonical URL is `/`.
+- `/`: picks the layout by screen width with CSS (`SchedulePage view="auto"`): **tickets** on phones, **posters** from the `md` breakpoint up. Both card styles are server-rendered and the hidden one is `display:none` (its lazy images never load), so there is no layout flash.
+- `/posters`: always **posters**. A full-width hero shows the next episode over its banner art with a big red countdown, followed by a grid of tall poster cards. Canonical URL `/`.
+- `/tickets`: always **tickets**. Each episode is a cinema ticket whose perforated stub holds the time and countdown. Canonical URL `/`.
 - `/my-list`: **قائمتي**, the visitor's favourite shows with their next episode. Not indexed.
 - Clicking a card, or "التفاصيل والقصة" in a hero, opens a **details popup**: art, genres, episode info, the synopsis with its official source, platform logos, and a favourite button.
 
@@ -26,7 +27,8 @@ Stack: Next.js 16 App Router (`cacheComponents: true`), React 19, TypeScript, Ta
 ```
 app/
   layout.tsx        <html lang="ar" dir="rtl">, fonts, all SEO metadata + viewport
-  page.tsx          Posters layout + WebSite JSON-LD
+  page.tsx          Auto layout (tickets on phones, posters on larger screens) + WebSite JSON-LD
+  posters/page.tsx  Posters layout
   tickets/page.tsx  Tickets layout
   my-list/page.tsx  Favourites page
   globals.css       Dark-only theme tokens, glow and ticket utilities, exposed to Tailwind with @theme
@@ -53,7 +55,7 @@ hooks/
   useRevealed.ts    Which mature shows the visitor chose to see, for this visit (shared across the page)
 components/
   Header.tsx, Footer.tsx            Server
-  SiteNav.tsx                       Client: ملصقات / تذاكر / ★ قائمتي (with count)
+  SiteNav.tsx                       Client: ملصقات / تذاكر / ★ قائمتي (with count); on / it highlights the layout the screen shows
   Toolbar.tsx                       Client: search, genre and platform filters
   PlatformLogos.tsx                 Brand logo tiles linking to official streaming pages
   schedule/SchedulePage.tsx         Server: shared page for both layouts; renders every card + its details
@@ -134,7 +136,7 @@ reference/
 - All SEO copy lives in `lib/site.ts`. The site URL comes from `NEXT_PUBLIC_SITE_URL`, falling back to Vercel's production URL. Search-console codes come from `GOOGLE_SITE_VERIFICATION` and `BING_SITE_VERIFICATION`.
 - Keep content visible in the server HTML. Don't hide content behind client-only rendering.
 - Heading order: one sr-only `h1` per schedule page (visible "قائمتي" on `/my-list`), then `h2` for sections and the hero title, then `h3` for cards.
-- `/tickets` is canonical to `/`; `/my-list` is `noindex`. The sitemap lists `/` only.
+- `/posters` and `/tickets` are canonical to `/`; `/my-list` is `noindex`. The sitemap lists `/` only.
 - The OG image and icons are static files rendered from HTML with headless Edge. `next/og` doesn't shape Arabic text reliably, so if they change, regenerate them the same way.
 
 **Environment variables**
