@@ -1,3 +1,5 @@
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
 import { Anton, IBM_Plex_Mono, IBM_Plex_Sans_Arabic, Reem_Kufi } from "next/font/google";
 import { SITE } from "@/lib/site";
@@ -78,7 +80,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       dir="rtl"
       className={`${reemKufi.variable} ${plexArabic.variable} ${plexMono.variable} ${anton.variable} h-full antialiased`}
     >
-      <body className="min-h-full font-sans">{children}</body>
+      <body className="min-h-full font-sans">
+        {children}
+        {/* Vercel Web Analytics (visitors) and Speed Insights (real-user performance); cookie-free. */}
+        <Analytics />
+        <SpeedInsights />
+      </body>
     </html>
   );
 }
