@@ -139,6 +139,12 @@ reference/
 - `/posters` and `/tickets` are canonical to `/`; `/my-list` is `noindex`. The sitemap lists `/` only.
 - The OG image and icons are static files rendered from HTML with headless Edge. `next/og` doesn't shape Arabic text reliably, so if they change, regenerate them the same way.
 
+**Deployment**
+- Live at **https://www.mawidanime.com**, hosted on Vercel (Hobby plan), deployed automatically from the `main` branch of github.com/Gutsing-Around/mawid. Every push to `main` goes live; roll back from Vercel → Deployments → Promote.
+- The domain was bought on Vercel (auto-renew on) and uses Vercel DNS. `www` is the primary address; `mawidanime.com` redirects to it with a 308.
+- Google Search Console is verified with a DNS TXT record in Vercel → Domains → mawidanime.com. Don't delete it.
+- Vercel production env: `NEXT_PUBLIC_SITE_URL=https://www.mawidanime.com` (type Config). Env changes need a redeploy.
+
 **Environment variables**
 - `NEXT_PUBLIC_SITE_URL`: the production URL.
 - `ANTHROPIC_API_KEY`: enables Arabic synopsis translation (optional).
