@@ -1,26 +1,105 @@
 @import "tailwindcss";
 
+/* Dark-only: near-black surfaces, white type, glowing red signals and a little green. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+  --background: #0a0909;
+  --surface: #121010;
+  --ink: #f4f1f1;
+  --muted: #8e8888;
+  --line: #262222;
+  --chip: #1c1919;
+  /* Red: the "hot" signal (next up, selected day, airing within the hour, countdown digits). */
+  --signal: #ff2e3e;
+  /* Green: secondary signal (on air now, season progress, platform links). */
+  --accent: #2bd97c;
+  /* Dark end of the airing progress line, more than 24 hours away. */
+  --accent-deep: #0f3d26;
+  --soon: var(--signal);
+  --banner: #0e0c0c;
+  --banner-ink: #f4f1f1;
+  --banner-accent: var(--signal);
 }
 
 @theme inline {
   --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-signal: var(--signal);
+  --color-accent: var(--accent);
+  --color-accent-deep: var(--accent-deep);
+  --color-soon: var(--soon);
+  --color-chip: var(--chip);
+  --color-banner: var(--banner);
+  --color-banner-ink: var(--banner-ink);
+  --color-banner-accent: var(--banner-accent);
+  --font-display: var(--font-reem-kufi), Tahoma, sans-serif;
+  /* Condensed face for poster titles and countdown digits (Latin); Arabic falls back to Reem Kufi. */
+  --font-poster: var(--font-anton), var(--font-reem-kufi), sans-serif;
+  --font-sans: var(--font-plex-arabic), "Segoe UI", Tahoma, sans-serif;
+  /* Times and countdowns; Arabic glyphs fall back to Plex Sans Arabic. */
+  --font-mono: var(--font-plex-mono), var(--font-plex-arabic), ui-monospace, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Neon glows for small signal details. */
+@utility glow-signal {
+  text-shadow:
+    0 0 10px rgb(255 46 62 / 0.75),
+    0 0 26px rgb(255 46 62 / 0.35);
+}
+
+@utility glow-accent {
+  text-shadow: 0 0 10px rgb(43 217 124 / 0.6);
+}
+
+@utility glow-box-signal {
+  box-shadow:
+    0 0 10px rgb(255 46 62 / 0.6),
+    0 0 22px rgb(255 46 62 / 0.25);
+}
+
+/* Ticket stub: a dashed perforation with punched notches where it meets the edges. */
+@utility ticket-stub {
+  position: relative;
+  border-inline-start: 2px dashed var(--line);
+  &::before,
+  &::after {
+    content: "";
+    position: absolute;
+    inset-inline-start: -10px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--background);
+    border: 1px solid var(--line);
+  }
+  &::before {
+    top: -11px;
+    clip-path: inset(50% 0 0 0);
+  }
+  &::after {
+    bottom: -10px;
+    clip-path: inset(0 0 50% 0);
+  }
+}
+
+/* On narrow screens the hero ticket stacks, so its perforation runs across instead. */
+@utility ticket-stub-hero {
+  @media (width < 48rem) {
+    border-inline-start: 0;
+    border-top: 2px dashed var(--line);
+    &::before,
+    &::after {
+      display: none;
+    }
   }
 }
 
 body {
   background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.6;
 }
