@@ -5,6 +5,8 @@ import type { FavoriteShow } from "@/lib/types";
 import { useLocalStorage } from "./useLocalStorage";
 
 const KEY = "mawid.favorites";
+/** Fired on window when a show is added, e.g. for the celebration pop-up. */
+export const FAVORITE_ADDED_EVENT = "mawid:favorite-added";
 const EMPTY: FavoriteShow[] = [];
 const isFavoriteList = (value: unknown): value is FavoriteShow[] =>
   Array.isArray(value) &&
@@ -22,12 +24,14 @@ export function useFavorites() {
   const isFavorite = useCallback((mediaId: number) => ids.has(mediaId), [ids]);
 
   const toggleFavorite = useCallback(
-    (show: FavoriteShow) =>
-      setFavorites(
-        ids.has(show.mediaId)
-          ? favorites.filter((f) => f.mediaId !== show.mediaId)
-          : [...favorites, show],
-      ),
+    (show: FavoriteShow) => {
+      if (ids.has(show.mediaId)) {
+        setFavorites(favorites.filter((f) => f.mediaId !== show.mediaId));
+      } else {
+        setFavorites([...favorites, show]);
+        window.dispatchEvent(new CustomEvent(FAVORITE_ADDED_EVENT, { detail: { title: show.title } }));
+      }
+    },
     [favorites, ids, setFavorites],
   );
 

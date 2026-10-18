@@ -61,6 +61,8 @@ components/
   SiteNav.tsx                       Client: ملصقات / تذاكر / ★ قائمتي (with count); on / it highlights the layout the screen shows
   Toolbar.tsx                       Client: search, genre and platform filters
   PlatformLogos.tsx                 Brand logo tiles linking to official streaming pages
+  Mascot.tsx                        The mascot (5 poses) as a decorative next/image
+  FavoriteToast.tsx                 Client: "أُضيف إلى قائمتي!" pop-up with the celebrating mascot
   schedule/SchedulePage.tsx         Server: shared page for both layouts; renders every card + its details
   schedule/ScheduleProvider.tsx     Client context: filters, selected day, visibleIds, nextId, open popup
   schedule/EpisodeSlot.tsx          Client: shows/hides a server-rendered card; renders its popup when open
@@ -77,6 +79,7 @@ components/
   time/CompactCountdown.tsx, AiringProgress.tsx                 Client: ticket stub countdown (08س 40د 12ث) and progress line
 reference/
   prototype.html, designs/          Early HTML prototype and design mockups (not part of the app)
+  mascot/                           Original mascot art (white background) + cutout.cjs, which regenerates public/mascot/*.webp
 ```
 
 ## Rules
@@ -142,6 +145,11 @@ reference/
   - `font-sans` (IBM Plex Sans Arabic) for body text.
   - `font-mono` (IBM Plex Mono) for times.
 - The footer must credit AniList as the data source.
+
+**Mascot**
+- Five poses in `public/mascot/` (transparent WebP, cut out of the originals in `reference/mascot/` with `node reference/mascot/cutout.cjs`). Use `<Mascot pose=... height=... />`; it's decorative (`alt=""`), so the text beside it must carry the message.
+- Where each pose is used: `celebrate` = the add-to-list pop-up (fired from `useFavorites` via `FAVORITE_ADDED_EVENT`); `fix` = `app/error.tsx`; `confused` = no search results and `app/not-found.tsx`; `sleepy` = a day with no episodes and a show page with no announced episode; `cool` = empty قائمتي.
+- Keep it to these few moments; don't scatter the mascot across regular UI.
 
 **SEO (target: Arabic-speaking countries)**
 - All SEO copy lives in `lib/site.ts`. The site URL comes from `NEXT_PUBLIC_SITE_URL`, falling back to Vercel's production URL. Search-console codes come from `GOOGLE_SITE_VERIFICATION` and `BING_SITE_VERIFICATION`.

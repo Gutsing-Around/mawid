@@ -8,6 +8,7 @@ import { SeasonProgress } from "@/components/card/SeasonProgress";
 import { SynopsisBlock } from "@/components/card/SynopsisBlock";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
+import { Mascot } from "@/components/Mascot";
 import { PlatformLogos } from "@/components/PlatformLogos";
 import { CountdownBoxes } from "@/components/schedule/CountdownBoxes";
 import { ScheduleProvider } from "@/components/schedule/ScheduleProvider";
@@ -104,9 +105,10 @@ export function ShowPage({ data, path }: { data: ShowPageData; path: string }) {
                 <CountdownBoxes airingAt={next.airingAt} variant="boxes" />
               </div>
             ) : (
-              <p className="mt-2 rounded-lg border border-line bg-surface p-4 text-muted">
-                لا توجد حلقة قادمة معلنة لهذا العمل حاليًا.
-              </p>
+              <div className="mt-2 flex items-center gap-4 rounded-lg border border-line bg-surface p-4 text-muted">
+                <Mascot pose="sleepy" height={96} />
+                <p>لا توجد حلقة قادمة معلنة لهذا العمل حاليًا.</p>
+              </div>
             )}
 
             <div className="mt-2 flex flex-wrap items-center gap-2.5">

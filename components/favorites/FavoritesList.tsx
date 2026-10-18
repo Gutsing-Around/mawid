@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { GenreTags } from "@/components/card/GenreTags";
+import { Mascot } from "@/components/Mascot";
 import { MatureCover } from "@/components/card/MatureCover";
 import { PlatformLogos } from "@/components/PlatformLogos";
 import { useSchedule } from "@/components/schedule/ScheduleProvider";
@@ -37,7 +38,8 @@ export function FavoritesList() {
 
   if (favorites.length === 0) {
     return (
-      <div className="rounded-[10px] border border-dashed border-line px-6 py-14 text-center">
+      <div className="flex flex-col items-center rounded-[10px] border border-dashed border-line px-6 py-10 text-center">
+        <Mascot pose="cool" height={200} className="mb-2" />
         <p className="font-display text-xl">قائمتك فارغة</p>
         <p className="mt-2 text-muted">اضغط ★ على أي عمل لإضافته هنا ومتابعة موعد حلقاته.</p>
         <Link href="/" className="mt-5 inline-block rounded-md border border-signal px-4 py-2 font-semibold text-signal glow-signal">
