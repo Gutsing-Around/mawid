@@ -203,12 +203,27 @@ async function fetchShow(mediaId: number): Promise<ShowPageData | null> {
 
 class AniListNotFound extends Error {}
 
+/** Retries after "too many requests" or a server error before giving up. */
+const MAX_ATTEMPTS = 4;
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function anilist<T>(query: string, variables: Record<string, unknown>): Promise<T> {
-  const res = await fetch(ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ query, variables }),
-  });
+  let res: Response;
+  for (let attempt = 1; ; attempt++) {
+    res = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ query, variables }),
+    });
+    const retryable = res.status === 429 || res.status >= 500;
+    if (!retryable || attempt === MAX_ATTEMPTS) break;
+    // AniList says how long to wait (Retry-After, seconds); otherwise back off 5s, 10s, 20s.
+    const retryAfter = Number(res.headers.get("retry-after"));
+    const seconds = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter, 65) : 5 * 2 ** (attempt - 1);
+    console.warn(`AniList returned HTTP ${res.status}; retrying in ${seconds}s (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
+    await wait(seconds * 1000);
+  }
   const json = (await res.json().catch(() => ({}))) as GraphQLResponse<T>;
   if (json.errors?.some((e) => e.status === 404)) throw new AniListNotFound("Not found");
   if (!res.ok) {

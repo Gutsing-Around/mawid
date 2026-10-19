@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- a plain Node (CommonJS) script, not app code */
 // Usage: node reference/mascot/cutout.cjs   (regenerates public/mascot/*.webp)
 // Removes the white background from the mascot images and writes transparent WebPs.
 // Flood-fills "paper" pixels from the image border (so enclosed whites like the glasses
