@@ -8,6 +8,7 @@ const SPRITE = "/mascot/look.webp";
 const CENTER = "/mascot/look-center.webp";
 const GRID = 5;
 const MIDDLE = 2;
+const LAST = GRID - 1;
 
 /**
  * How far the cursor must go for a full turn is measured per direction from the space that
@@ -15,14 +16,17 @@ const MIDDLE = 2;
  * outer side. Reaching the screen edge in any direction turns it all the way, within these limits.
  */
 const RANGE_LIMITS = { x: [70, 650], y: [34, 480] } as const;
+/** How quickly the head glides to the next drawn frame (ms; lower = snappier). */
+const FOLLOW_MS = 75;
 /** How far past a frame boundary the cursor must go before switching back (prevents flicker). */
-const HYSTERESIS = 0.18;
-/** Time between frames when the head sweeps across several of them. */
-const STEP_MS = 55;
-/** Crossfade between two frames. */
-const FADE_MS = 110;
+const HYSTERESIS = 0.15;
 /** Phones have no cursor: after a touch, the face looks back to the front after this long. */
 const TOUCH_RETURN_MS = 2500;
+/**
+ * Continuous drift (px) of the whole head with the cursor: a little overall, plus a little within
+ * the current frame, so small mouse movements move the head smoothly between drawn angles.
+ */
+const DRIFT = { overall: 1.4, withinFrame: 2.2 };
 
 /** Each frame is shown a bit larger than the badge, so the head (not the shoulders) fills the circle. */
 const ZOOM = 1.32;
@@ -30,59 +34,101 @@ const ZOOM = 1.32;
 const HEAD_CENTER_X = 0.5;
 const HEAD_CENTER_Y_BY_ROW = [0.42, 0.43, 0.44, 0.47, 0.5];
 
+const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+
 /**
- * The mascot beside the logo, watching the cursor. It shows one of 25 drawn frames (the head
- * turned toward the cursor), steps through the in-between frames when the cursor jumps far,
- * and crossfades between them, so the turn looks drawn rather than distorted. Updates the DOM
- * directly (no React re-renders). On touch screens it follows the finger. With reduced motion
- * it stays facing forward. The 115 KB sprite only loads on the first pointer movement.
+ * The mascot beside the logo, watching the cursor.
+ *
+ * The head always settles on one of the 25 drawn frames (the one nearest the cursor's
+ * direction), so at rest it's a clean drawing, never a double image. Moving between frames, it
+ * glides: the drawn point eases toward the new frame (frame-rate independent smoothing) and the
+ * 4 nearest frames are blended by distance for that split second. Meanwhile the whole head
+ * drifts a couple of pixels continuously with the cursor, so small movements feel fluid. Four stacked layers are updated
+ * directly in requestAnimationFrame (no React re-renders), only while moving. On touch it
+ * follows the finger; with reduced motion it stays still. The 115 KB sprite loads on the first
+ * pointer event; a 5 KB front frame shows until then.
  */
 export function MascotFace({ size }: { size: number }) {
-  const backRef = useRef<HTMLSpanElement>(null);
-  const frontRef = useRef<HTMLSpanElement>(null);
+  const headRef = useRef<HTMLSpanElement>(null);
+  const layerRefs = useRef<(HTMLSpanElement | null)[]>([]);
 
   useEffect(() => {
-    const back = backRef.current;
-    const front = frontRef.current;
-    if (!back || !front || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const head = headRef.current;
+    const layers = layerRefs.current.filter((l): l is HTMLSpanElement => l !== null);
+    if (!head || layers.length !== 4 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     const cell = size * ZOOM;
     const offsetX = size / 2 - HEAD_CENTER_X * cell;
     const paint = (el: HTMLSpanElement, row: number, col: number) => {
       const offsetY = size / 2 - HEAD_CENTER_Y_BY_ROW[row] * cell;
-      el.style.backgroundImage = `url(${SPRITE})`;
-      el.style.backgroundSize = `${cell * GRID}px ${cell * GRID}px`;
       el.style.backgroundPosition = `${offsetX - col * cell}px ${offsetY - row * cell}px`;
     };
 
+    // pos: the blended point being drawn; goal: the drawn frame it settles on (always whole
+    // numbers, so at rest there's never a double image); raw: the exact cursor-derived point.
+    const pos = { x: MIDDLE, y: MIDDLE };
+    const goal = { x: MIDDLE, y: MIDDLE };
+    const raw = { x: MIDDLE, y: MIDDLE };
+    const drift = { x: 0, y: 0 };
     let spriteReady = false;
     let spriteRequested = false;
-    const shown = { row: MIDDLE, col: MIDDLE };
-    const target = { row: MIDDLE, col: MIDDLE };
-    let stepTimer: ReturnType<typeof setTimeout> | undefined;
+    let frame = 0;
+    let last = 0;
     let returnTimer: ReturnType<typeof setTimeout> | undefined;
 
-    // Move one frame at a time toward the target, crossfading each step.
-    const step = () => {
-      stepTimer = undefined;
-      if (!spriteReady || (shown.row === target.row && shown.col === target.col)) return;
-      const previous = { ...shown };
-      shown.row += Math.sign(target.row - shown.row);
-      shown.col += Math.sign(target.col - shown.col);
-      paint(back, previous.row, previous.col);
-      paint(front, shown.row, shown.col);
-      front.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_MS, easing: "ease-out" });
-      stepTimer = setTimeout(step, STEP_MS);
-    };
-    const lookAt = (row: number, col: number) => {
-      target.row = row;
-      target.col = col;
-      if (!stepTimer) step();
+    // Blend the 4 frames around the current point. With "over" compositing, layer k gets
+    // opacity = its weight / (sum of weights so far), which yields exactly the bilinear weights.
+    const render = () => {
+      const x = clamp(pos.x, 0, LAST);
+      const y = clamp(pos.y, 0, LAST);
+      const col = Math.min(LAST - 1, Math.floor(x));
+      const row = Math.min(LAST - 1, Math.floor(y));
+      const fx = x - col;
+      const fy = y - row;
+      const cells: [number, number, number][] = [
+        [row, col, (1 - fx) * (1 - fy)],
+        [row, col + 1, fx * (1 - fy)],
+        [row + 1, col, (1 - fx) * fy],
+        [row + 1, col + 1, fx * fy],
+      ];
+      let sum = 0;
+      cells.forEach(([r, c, weight], k) => {
+        sum += weight;
+        paint(layers[k], r, c);
+        layers[k].style.opacity = k === 0 ? "1" : sum > 0 ? (weight / sum).toFixed(3) : "0";
+      });
+      head.style.transform = `translate(${drift.x.toFixed(2)}px, ${drift.y.toFixed(2)}px)`;
     };
 
-    // Continuous position (0…4) → frame index, sticking to the current frame near boundaries.
-    const toIndex = (value: number, current: number) =>
-      Math.abs(value - current) < 0.5 + HYSTERESIS ? current : Math.round(value);
+    const tick = (now: number) => {
+      const dt = last ? Math.min(64, now - last) : 16;
+      last = now;
+      const t = 1 - Math.exp(-dt / FOLLOW_MS);
+      pos.x += (goal.x - pos.x) * t;
+      pos.y += (goal.y - pos.y) * t;
+      const driftGoal = (axis: "x" | "y") =>
+        ((raw[axis] - MIDDLE) / MIDDLE) * DRIFT.overall + (raw[axis] - goal[axis]) * DRIFT.withinFrame;
+      drift.x += (driftGoal("x") - drift.x) * t;
+      drift.y += (driftGoal("y") - drift.y) * t;
+      render();
+      const moving =
+        Math.abs(goal.x - pos.x) > 0.002 ||
+        Math.abs(goal.y - pos.y) > 0.002 ||
+        Math.abs(driftGoal("x") - drift.x) > 0.01 ||
+        Math.abs(driftGoal("y") - drift.y) > 0.01;
+      frame = moving ? requestAnimationFrame(tick) : 0;
+      if (!moving) last = 0;
+    };
+    // Settle on the nearest drawn frame, sticking to the current one near boundaries.
+    const nearest = (value: number, current: number) =>
+      Math.abs(value - current) < 0.5 + HYSTERESIS ? current : clamp(Math.round(value), 0, LAST);
+    const lookAt = (x: number, y: number) => {
+      raw.x = x;
+      raw.y = y;
+      goal.x = nearest(x, goal.x);
+      goal.y = nearest(y, goal.y);
+      if (spriteReady && !frame) frame = requestAnimationFrame(tick);
+    };
 
     const loadSprite = () => {
       if (spriteRequested) return;
@@ -90,28 +136,29 @@ export function MascotFace({ size }: { size: number }) {
       const img = new Image();
       img.onload = () => {
         spriteReady = true;
-        paint(back, shown.row, shown.col);
-        paint(front, shown.row, shown.col);
-        step();
+        for (const layer of layers) {
+          layer.style.backgroundImage = `url(${SPRITE})`;
+          layer.style.backgroundSize = `${cell * GRID}px ${cell * GRID}px`;
+        }
+        render();
+        frame = requestAnimationFrame(tick);
       };
       img.src = SPRITE;
     };
 
     const onPointer = (e: PointerEvent) => {
       loadSprite();
-      const r = front.getBoundingClientRect();
-      const dx = e.clientX - (r.left + r.width / 2);
-      const dy = e.clientY - (r.top + r.height / 2);
-      // Space from the face to the screen edge on the side the cursor is on.
-      const room = (delta: number, before: number, after: number, [min, max]: readonly [number, number]) =>
-        Math.min(max, Math.max(min, delta < 0 ? before : after));
+      const r = head.parentElement!.getBoundingClientRect();
       const cx = r.left + r.width / 2;
       const cy = r.top + r.height / 2;
+      const dx = e.clientX - cx;
+      const dy = e.clientY - cy;
+      // Space from the face to the screen edge on the side the cursor is on.
+      const room = (delta: number, before: number, after: number, [min, max]: readonly [number, number]) =>
+        clamp(delta < 0 ? before : after, min, max);
       const rangeX = room(dx, cx, window.innerWidth - cx, RANGE_LIMITS.x);
       const rangeY = room(dy, cy, window.innerHeight - cy, RANGE_LIMITS.y);
-      const x = (Math.max(-1, Math.min(1, dx / rangeX)) + 1) * MIDDLE;
-      const y = (Math.max(-1, Math.min(1, dy / rangeY)) + 1) * MIDDLE;
-      lookAt(toIndex(y, target.row), toIndex(x, target.col));
+      lookAt((clamp(dx / rangeX, -1, 1) + 1) * MIDDLE, (clamp(dy / rangeY, -1, 1) + 1) * MIDDLE);
       clearTimeout(returnTimer);
       if (e.pointerType === "touch") returnTimer = setTimeout(() => lookAt(MIDDLE, MIDDLE), TOUCH_RETURN_MS);
     };
@@ -126,18 +173,17 @@ export function MascotFace({ size }: { size: number }) {
       window.removeEventListener("pointerdown", onPointer);
       document.documentElement.removeEventListener("pointerleave", center);
       window.removeEventListener("blur", center);
-      clearTimeout(stepTimer);
+      cancelAnimationFrame(frame);
       clearTimeout(returnTimer);
     };
   }, [size]);
 
-  // Before the sprite loads, both layers show the small front-facing frame.
+  // Before the sprite loads, the bottom layer shows the small front-facing frame.
   const cell = size * ZOOM;
-  const initial: React.CSSProperties = {
+  const frontFrame: React.CSSProperties = {
     backgroundImage: `url(${CENTER})`,
     backgroundSize: `${cell}px ${cell}px`,
     backgroundPosition: `${size / 2 - HEAD_CENTER_X * cell}px ${size / 2 - HEAD_CENTER_Y_BY_ROW[MIDDLE] * cell}px`,
-    backgroundRepeat: "no-repeat",
   };
 
   return (
@@ -146,8 +192,21 @@ export function MascotFace({ size }: { size: number }) {
       className="relative inline-block shrink-0 overflow-hidden rounded-full border border-line bg-chip shadow-[0_0_14px_rgb(255_46_62/0.25)]"
       style={{ width: size, height: size }}
     >
-      <span ref={backRef} className="absolute inset-0 bg-no-repeat" style={initial} />
-      <span ref={frontRef} className="absolute inset-0 bg-no-repeat" style={initial} />
+      {/* Breathing: a very slow, tiny rise and fall so the face never looks frozen. */}
+      <span className="absolute inset-0 animate-[breathe_3.8s_ease-in-out_infinite_alternate] motion-reduce:animate-none">
+        <span ref={headRef} className="absolute inset-0 will-change-transform">
+          {[0, 1, 2, 3].map((k) => (
+            <span
+              key={k}
+              ref={(el) => {
+                layerRefs.current[k] = el;
+              }}
+              className="absolute inset-0 bg-no-repeat"
+              style={k === 0 ? frontFrame : { opacity: 0 }}
+            />
+          ))}
+        </span>
+      </span>
     </span>
   );
 }

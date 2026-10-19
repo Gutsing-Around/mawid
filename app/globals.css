@@ -60,6 +60,16 @@
     0 0 22px rgb(255 46 62 / 0.25);
 }
 
+/* The logo mascot's idle breathing: a barely visible rise and fall. */
+@keyframes breathe {
+  from {
+    transform: translateY(0.3px) scale(1);
+  }
+  to {
+    transform: translateY(-0.5px) scale(1.018);
+  }
+}
+
 /* The "added to my list" pop-up rises in from below. */
 @keyframes toast-in {
   from {
