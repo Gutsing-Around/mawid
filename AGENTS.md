@@ -21,6 +21,7 @@ Stack: Next.js 16 App Router (`cacheComponents: true`), React 19, TypeScript, Ta
 - `/tickets`: always **tickets**. Each episode is a cinema ticket whose perforated stub holds the time and countdown. Canonical URL `/`.
 - `/anime/[slug]`: a **show page** per show (`showPath()`: readable slug + AniList media ID, e.g. `/anime/black-clover-season-2-195604`). Hero with art, Arabic + English titles, countdown, favourite and reminder buttons; the story; platform logos; TVSeries JSON-LD and per-show metadata. Shows airing this week are prerendered from the cached schedule (no extra AniList requests); other IDs are fetched on first visit and cached; outdated slugs redirect; unknown IDs 404.
 - `/my-list`: **قائمتي**, the visitor's favourite shows with their next episode. Not indexed.
+- `/review`: an unlinked page for the owner (`noindex, nofollow`). It lists every show airing this week and whether its Arabic name and synopsis are checked (data files), automatic (Claude) or missing, plus the automatic names as ready-to-paste lines for `data/titles-ar.ts`.
 - Clicking a card, or "التفاصيل والقصة" in a hero, opens a **details popup**: art, Arabic title, genres, episode info, the synopsis with its official source, platform logos, favourite and reminder buttons, and a link to the show page. Card links are real `<a href>`s to the show page (crawlable; Ctrl/middle-click opens the page), and a plain click opens the popup instead.
 
 ## Structure
@@ -32,6 +33,7 @@ app/
   posters/page.tsx  Posters layout
   tickets/page.tsx  Tickets layout
   my-list/page.tsx  Favourites page
+  review/page.tsx   Owner's review of automatic Arabic names and synopses (not linked, noindex)
   anime/[slug]/page.tsx  Show pages: generateStaticParams, generateMetadata, slug redirect
   globals.css       Dark-only theme tokens, glow and ticket utilities, exposed to Tailwind with @theme
   error.tsx         Arabic error screen with retry (shown when AniList fails)
@@ -40,14 +42,14 @@ app/
 lib/
   site.ts           Site name, URL, SEO title/description/keywords, default time zone
   anilist.ts        AniList GraphQL query, pagination, normalization, synopsis cleanup + localization, caching
-  translate.ts      Claude translation of official synopses to Arabic (opt-in, cached per text)
+  translate.ts      Claude: Arabic synopses from the official English text, and automatic Arabic show names (opt-in, cached per text)
   types.ts          Episode (full, server), EpisodeSummary (sent to the client), Synopsis, FavoriteShow
   schedule.ts       toSummary, matchesFilters (the one filter rule), genre/platform option lists
   genres.ts         AniList genre → Arabic lookup; Ecchi is flagged as mature (red)
   platforms.ts      Platform → brand colour + logo path (Simple Icons, CC0) or wordmark; generated logo data
   format.ts         Arabic counting rules, countdown/clock text, Intl formatters, local day keys
 data/
-  titles-ar.ts      Arabic show names fans actually use (only established names; others left out)
+  titles-ar.ts      Checked Arabic show names (these win over automatic names)
   descriptions.ts   Hand-written Arabic synopses keyed by AniList media ID; these override everything
   synopses-ar.ts    Prepared Arabic synopses (adapted from AniList's English text) for the October 2026 shows
 hooks/
@@ -97,6 +99,7 @@ reference/
   2. The prepared Arabic synopses in `data/synopses-ar.ts`. When new shows appear, add entries there in the same style: a clear Arabic story pitch, names as Arab fans write them, no notes or credits, no invented facts. For bare "second season of X" texts, a short premise is fine only when it is certain.
   3. A Claude translation of AniList's official English synopsis. This runs only when `ANTHROPIC_API_KEY` is set on the server, and each text is cached with `cacheLife("max")`.
   4. The English text, with an Arabic note saying the Arabic version is in preparation.
+- **Arabic show names**: the checked name in `data/titles-ar.ts`, else an automatic name from Claude (`arabicTitleFor`, only with `ANTHROPIC_API_KEY`, cached per title with `cacheLife("max")`; replies that aren't a short one-line Arabic name are dropped), else none (the English title alone). The prompt prefers the name Arab fans already use, otherwise a transliteration by sound, with season numbers as Western digits. Confirm automatic names on `/review` by moving them into `data/titles-ar.ts`.
 - The translation prompt (`lib/translate.ts`) asks for a short, clear Arabic story pitch in the style of official Arabic synopses on streaming services, not a literal translation. Never copy synopses from streaming sites; their Arabic text is copyrighted.
 - `cleanDescription` strips AniList's HTML and trailing "Note:" sections, and pulls the "(Source: …)" credit out from anywhere in the text. The credit is always shown as "المصدر: …".
 - A failed translation falls back to English and isn't cached, so it's retried on the next refresh.

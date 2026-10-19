@@ -2,11 +2,11 @@ import Anthropic from "@anthropic-ai/sdk";
 import { cacheLife } from "next/cache";
 
 /**
- * Arabic translation of an official English synopsis, using Claude.
+ * Arabic translation of official English synopses and automatic Arabic show names, using Claude.
  *
- * Opt-in: runs only when ANTHROPIC_API_KEY is set on the server. Each synopsis is
+ * Opt-in: runs only when ANTHROPIC_API_KEY is set on the server. Each synopsis or title is
  * translated once and cached for as long as the cache lives (keyed by its text), so a
- * schedule refresh only pays for shows that are new or whose synopsis changed.
+ * schedule refresh only pays for shows that are new or whose text changed.
  */
 export const translationEnabled = Boolean(process.env.ANTHROPIC_API_KEY);
 
@@ -24,23 +24,31 @@ How to write it:
 
 Reply with the Arabic synopsis only: no title, introduction, notes or quotation marks.`;
 
+const TITLE_PROMPT = `You give the Arabic name of an anime for موعد الحلقة, an Arabic website where viewers check when new episodes air. You receive the show's English title and its romaji (Japanese) title.
+
+- If Arab fans already know the show by an Arabic name (an Arabic dub title or a widely used fan name), use exactly that name ("Detective Conan" → "المحقق كونان").
+- Otherwise write the title in Arabic letters the way Arab anime fans would write it: transliterate names and invented words by sound ("Black Clover" → "بلاك كلوفر"), and translate a plain descriptive title or subtitle by meaning when that reads naturally ("The Apothecary Diaries" → "مذكرات الصيدلانية").
+- Base it on whichever title fans actually use, usually the English one; use the romaji one when the show has no real English title.
+- Write season and part numbers as Western digits after the name ("Season 2" → "2"), and keep a subtitle after a colon.
+- Don't invent anything that isn't in the titles.
+
+Reply with the Arabic name only: one line, no explanation or quotation marks.`;
+
 let client: Anthropic | undefined;
 
-export async function translateToArabic(english: string): Promise<string | null> {
-  "use cache";
-  cacheLife("max");
-
+/** One short reply from Claude, or null if it declined. */
+async function ask(system: string, content: string, maxTokens: number): Promise<string | null> {
   client ??= new Anthropic();
   const response = await client.beta.messages.create({
     model: "claude-opus-5-5",
-    max_tokens: 4000,
+    max_tokens: maxTokens,
     // Translation is a simple task; low effort keeps it fast and cheap.
     output_config: { effort: "low" },
     // If the model declines for policy reasons, retry on Anthropic's recommended fallback.
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
-    system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: english }],
+    system,
+    messages: [{ role: "user", content }],
   });
 
   if (response.stop_reason === "refusal") return null;
@@ -49,4 +57,23 @@ export async function translateToArabic(english: string): Promise<string | null>
     .join("")
     .trim();
   return text || null;
+}
+
+export async function translateToArabic(english: string): Promise<string | null> {
+  "use cache";
+  cacheLife("max");
+  return ask(SYSTEM_PROMPT, english, 4000);
+}
+
+/**
+ * An automatic Arabic name for a show that isn't in data/titles-ar.ts yet, cached per title.
+ * The /review page lists these so the owner can confirm them and move them into the file.
+ * Returns null if the reply doesn't look like a short Arabic name.
+ */
+export async function arabicTitleFor(english: string | null, romaji: string): Promise<string | null> {
+  "use cache";
+  cacheLife("max");
+  const name = await ask(TITLE_PROMPT, `English title: ${english ?? "(none)"}\nRomaji title: ${romaji}`, 200);
+  const looksRight = name && !name.includes("\n") && name.length <= 80 && /[؀-ۿ]/.test(name);
+  return looksRight ? name.replace(/^["«“]|["»”]$/g, "") : null;
 }

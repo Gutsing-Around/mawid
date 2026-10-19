@@ -4,7 +4,7 @@ import { translatedSynopses } from "@/data/synopses-ar";
 import { arabicTitles } from "@/data/titles-ar";
 import { DAY, HOUR } from "@/lib/format";
 import { isMatureContent } from "@/lib/genres";
-import { translateToArabic, translationEnabled } from "@/lib/translate";
+import { arabicTitleFor, translateToArabic, translationEnabled } from "@/lib/translate";
 import type { Episode, NextEpisode, Platform, ShowInfo, Synopsis } from "@/lib/types";
 
 const ENDPOINT = "https://graphql.anilist.co";
@@ -150,9 +150,9 @@ export async function getSchedule(): Promise<Schedule> {
     if (!Page.pageInfo.hasNextPage) break;
   }
 
-  const synopses = await localizeSynopses([...schedules.values()].map((s) => s.media));
+  const { synopses, titles } = await localize([...schedules.values()].map((s) => s.media));
   const episodes = [...schedules.values()].map(({ schedule, media }) => ({
-    ...toShowInfo(media, synopses.get(media.id) ?? null),
+    ...toShowInfo(media, synopses.get(media.id) ?? null, titles.get(media.id) ?? null),
     id: schedule.id,
     episode: schedule.episode,
     airingAt: schedule.airingAt,
@@ -193,10 +193,10 @@ async function fetchShow(mediaId: number): Promise<ShowPageData | null> {
   const media = data.Media;
   if (!media || media.isAdult) return null;
 
-  const synopses = await localizeSynopses([media]);
+  const { synopses, titles } = await localize([media]);
   return {
     generatedAt: Math.floor(Date.now() / 1000),
-    show: toShowInfo(media, synopses.get(media.id) ?? null),
+    show: toShowInfo(media, synopses.get(media.id) ?? null, titles.get(media.id) ?? null),
     next: media.nextAiringEpisode,
   };
 }
@@ -236,14 +236,14 @@ async function anilist<T>(query: string, variables: Record<string, unknown>): Pr
   return json.data;
 }
 
-function toShowInfo(media: AniListMedia, synopsis: Synopsis | null): ShowInfo {
+function toShowInfo(media: AniListMedia, synopsis: Synopsis | null, arabicTitle: string | null): ShowInfo {
   const romaji = media.title?.romaji ?? media.title?.english ?? "";
   return {
     mediaId: media.id,
     totalEpisodes: media.episodes,
     title: media.title?.english ?? romaji,
     romaji,
-    arabicTitle: arabicTitles[media.id] ?? null,
+    arabicTitle,
     cover: media.coverImage?.large ?? null,
     coverColor: media.coverImage?.color ?? null,
     banner: media.bannerImage,
@@ -264,17 +264,64 @@ function streamingPlatforms(links: NonNullable<AniListMedia["externalLinks"]>): 
   return [...bySite.values()];
 }
 
+/** Arabic synopses and show names for a list of shows. */
+async function localize(mediaList: AniListMedia[]) {
+  const unique = [...new Map(mediaList.map((m) => [m.id, m])).values()];
+  const [synopses, titles] = await Promise.all([localizeSynopses(unique), localizeTitles(unique)]);
+  return { synopses, titles };
+}
+
+/**
+ * Runs a Claude task for each item, a few at a time. A failure is logged and skipped (the
+ * result isn't cached), so it's retried on the next refresh.
+ */
+async function inPool<T>(items: T[], label: (item: T) => string, task: (item: T) => Promise<void>) {
+  const queue = [...items];
+  const worker = async () => {
+    for (let item = queue.shift(); item; item = queue.shift()) {
+      try {
+        await task(item);
+      } catch (error) {
+        console.error(`${label(item)} failed`, error);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: TRANSLATION_CONCURRENCY }, worker));
+}
+
+/**
+ * One Arabic name per show: the checked name in data/titles-ar.ts, or else an automatic one
+ * from Claude (when translation is enabled), which /review lists for the owner to confirm.
+ * Shows with neither are shown by their English title only.
+ */
+async function localizeTitles(unique: AniListMedia[]): Promise<Map<number, string>> {
+  const result = new Map<number, string>();
+  const missing: AniListMedia[] = [];
+  for (const media of unique) {
+    if (arabicTitles[media.id]) result.set(media.id, arabicTitles[media.id]);
+    else if (translationEnabled && (media.title?.romaji || media.title?.english)) missing.push(media);
+  }
+  await inPool(
+    missing,
+    (media) => `Naming AniList media ${media.id} in Arabic`,
+    async (media) => {
+      const name = await arabicTitleFor(media.title?.english ?? null, media.title?.romaji ?? media.title?.english ?? "");
+      if (name) result.set(media.id, name);
+    },
+  );
+  return result;
+}
+
 /**
  * One synopsis per show, in order of preference: the hand-written Arabic text in
  * data/descriptions.ts, the prepared Arabic synopses in data/synopses-ar.ts, a cached
  * Claude translation of the official English text, or the English text itself.
  */
-async function localizeSynopses(mediaList: AniListMedia[]): Promise<Map<number, Synopsis>> {
-  const unique = new Map(mediaList.map((m) => [m.id, m]));
+async function localizeSynopses(unique: AniListMedia[]): Promise<Map<number, Synopsis>> {
   const result = new Map<number, Synopsis>();
   const toTranslate: { id: number; text: string; source: string | null }[] = [];
 
-  for (const media of unique.values()) {
+  for (const media of unique) {
     const official = media.description ? cleanDescription(media.description) : null;
     const arabic = descriptions[media.id] ?? translatedSynopses[media.id];
     if (arabic) {
@@ -285,19 +332,15 @@ async function localizeSynopses(mediaList: AniListMedia[]): Promise<Map<number, 
     }
   }
 
-  // A small worker pool; a failed translation keeps the English text and is retried on the next refresh.
-  const queue = [...toTranslate];
-  const worker = async () => {
-    for (let item = queue.shift(); item; item = queue.shift()) {
-      try {
-        const arabic = await translateToArabic(item.text);
-        if (arabic) result.set(item.id, { text: arabic, lang: "ar", source: item.source });
-      } catch (error) {
-        console.error(`Translating the synopsis of AniList media ${item.id} failed`, error);
-      }
-    }
-  };
-  await Promise.all(Array.from({ length: TRANSLATION_CONCURRENCY }, worker));
+  // A failed translation keeps the English text.
+  await inPool(
+    toTranslate,
+    (item) => `Translating the synopsis of AniList media ${item.id}`,
+    async (item) => {
+      const arabic = await translateToArabic(item.text);
+      if (arabic) result.set(item.id, { text: arabic, lang: "ar", source: item.source });
+    },
+  );
 
   return result;
 }

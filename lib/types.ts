@@ -20,7 +20,7 @@ export type ShowInfo = {
   totalEpisodes: number | null;
   title: string;
   romaji: string;
-  /** The Arabic name fans use, when one exists (data/titles-ar.ts). */
+  /** The Arabic name: checked (data/titles-ar.ts) or automatic from Claude; null when neither. */
   arabicTitle: string | null;
   cover: string | null;
   coverColor: string | null;
