@@ -1,76 +1,121 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useRef } from "react";
 
-/** The two lenses in face.webp, as % of the image: [left, top, right, bottom]. Measured from the art. */
-const LENSES = [
-  [19.3, 48, 39.2, 60.5],
-  [49.8, 51.3, 72.6, 65],
-] as const;
-
-/** The head turns toward the cursor (slightly enlarged so the circle never shows an edge). */
-const HEAD_STYLE: React.CSSProperties = {
-  transform:
-    "scale(1.16) translate(calc(var(--lx) * 13%), calc(var(--ly) * 10%)) rotateY(calc(var(--lx) * 30deg)) rotateX(calc(var(--ly) * -24deg))",
-};
-/** Each lens keeps its brightest spot facing the cursor; the far side is shaded. */
-const LENS_STYLE: React.CSSProperties = {
-  background:
-    "radial-gradient(circle at calc(50% + var(--lx) * 38%) calc(50% + var(--ly) * 38%), transparent 22%, rgb(60 38 26 / 0.55) 100%)",
-};
-
-/** How far (px) the cursor has to be for the head to turn all the way. */
-const FULL_TURN_DISTANCE = 320;
-/** Phones have no cursor: after a touch, the face drifts back to centre after this long. */
-const TOUCH_RETURN_MS = 2500;
+/** The look sprite: 5×5 frames, row = looking up → down, column = looking left → right (viewer's side). */
+const SPRITE = "/mascot/look.webp";
+/** The front-facing frame alone, shown until the sprite has loaded. */
+const CENTER = "/mascot/look-center.webp";
+const GRID = 5;
+const MIDDLE = 2;
 
 /**
- * The mascot's face beside the logo. It watches the cursor: the head turns toward it in 3D
- * and the bright spot of each glowing lens slides toward it. On touch screens it follows
- * the finger while touching. Motion is driven by two CSS variables (--lx, --ly in -1…1)
- * updated at most once per frame, so React never re-renders. Off when reduced motion is on.
+ * How far the cursor must go for a full turn is measured per direction from the space that
+ * side actually has: the face sits in a top corner, so there's little room above it or to its
+ * outer side. Reaching the screen edge in any direction turns it all the way, within these limits.
+ */
+const RANGE_LIMITS = { x: [70, 650], y: [34, 480] } as const;
+/** How far past a frame boundary the cursor must go before switching back (prevents flicker). */
+const HYSTERESIS = 0.18;
+/** Time between frames when the head sweeps across several of them. */
+const STEP_MS = 55;
+/** Crossfade between two frames. */
+const FADE_MS = 110;
+/** Phones have no cursor: after a touch, the face looks back to the front after this long. */
+const TOUCH_RETURN_MS = 2500;
+
+/** Each frame is shown a bit larger than the badge, so the head (not the shoulders) fills the circle. */
+const ZOOM = 1.32;
+/** Where the head's centre sits inside a frame (fraction of the frame); lower when looking down. */
+const HEAD_CENTER_X = 0.5;
+const HEAD_CENTER_Y_BY_ROW = [0.42, 0.43, 0.44, 0.47, 0.5];
+
+/**
+ * The mascot beside the logo, watching the cursor. It shows one of 25 drawn frames (the head
+ * turned toward the cursor), steps through the in-between frames when the cursor jumps far,
+ * and crossfades between them, so the turn looks drawn rather than distorted. Updates the DOM
+ * directly (no React re-renders). On touch screens it follows the finger. With reduced motion
+ * it stays facing forward. The 115 KB sprite only loads on the first pointer movement.
  */
 export function MascotFace({ size }: { size: number }) {
-  const ref = useRef<HTMLSpanElement>(null);
+  const backRef = useRef<HTMLSpanElement>(null);
+  const frontRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const back = backRef.current;
+    const front = frontRef.current;
+    if (!back || !front || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-    const target = { x: 0, y: 0 };
-    const current = { x: 0, y: 0 };
-    let frame = 0;
+    const cell = size * ZOOM;
+    const offsetX = size / 2 - HEAD_CENTER_X * cell;
+    const paint = (el: HTMLSpanElement, row: number, col: number) => {
+      const offsetY = size / 2 - HEAD_CENTER_Y_BY_ROW[row] * cell;
+      el.style.backgroundImage = `url(${SPRITE})`;
+      el.style.backgroundSize = `${cell * GRID}px ${cell * GRID}px`;
+      el.style.backgroundPosition = `${offsetX - col * cell}px ${offsetY - row * cell}px`;
+    };
+
+    let spriteReady = false;
+    let spriteRequested = false;
+    const shown = { row: MIDDLE, col: MIDDLE };
+    const target = { row: MIDDLE, col: MIDDLE };
+    let stepTimer: ReturnType<typeof setTimeout> | undefined;
     let returnTimer: ReturnType<typeof setTimeout> | undefined;
 
-    // Ease toward the target each frame, so the head moves smoothly rather than snapping.
+    // Move one frame at a time toward the target, crossfading each step.
     const step = () => {
-      current.x += (target.x - current.x) * 0.18;
-      current.y += (target.y - current.y) * 0.18;
-      el.style.setProperty("--lx", current.x.toFixed(3));
-      el.style.setProperty("--ly", current.y.toFixed(3));
-      frame =
-        Math.abs(target.x - current.x) > 0.002 || Math.abs(target.y - current.y) > 0.002
-          ? requestAnimationFrame(step)
-          : 0;
+      stepTimer = undefined;
+      if (!spriteReady || (shown.row === target.row && shown.col === target.col)) return;
+      const previous = { ...shown };
+      shown.row += Math.sign(target.row - shown.row);
+      shown.col += Math.sign(target.col - shown.col);
+      paint(back, previous.row, previous.col);
+      paint(front, shown.row, shown.col);
+      front.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_MS, easing: "ease-out" });
+      stepTimer = setTimeout(step, STEP_MS);
     };
-    const moveTo = (x: number, y: number) => {
-      target.x = x;
-      target.y = y;
-      if (!frame) frame = requestAnimationFrame(step);
+    const lookAt = (row: number, col: number) => {
+      target.row = row;
+      target.col = col;
+      if (!stepTimer) step();
+    };
+
+    // Continuous position (0…4) → frame index, sticking to the current frame near boundaries.
+    const toIndex = (value: number, current: number) =>
+      Math.abs(value - current) < 0.5 + HYSTERESIS ? current : Math.round(value);
+
+    const loadSprite = () => {
+      if (spriteRequested) return;
+      spriteRequested = true;
+      const img = new Image();
+      img.onload = () => {
+        spriteReady = true;
+        paint(back, shown.row, shown.col);
+        paint(front, shown.row, shown.col);
+        step();
+      };
+      img.src = SPRITE;
     };
 
     const onPointer = (e: PointerEvent) => {
-      const r = el.getBoundingClientRect();
+      loadSprite();
+      const r = front.getBoundingClientRect();
       const dx = e.clientX - (r.left + r.width / 2);
       const dy = e.clientY - (r.top + r.height / 2);
-      const distance = Math.hypot(dx, dy) || 1;
-      const reach = Math.min(1, distance / FULL_TURN_DISTANCE);
-      moveTo((dx / distance) * reach, (dy / distance) * reach);
+      // Space from the face to the screen edge on the side the cursor is on.
+      const room = (delta: number, before: number, after: number, [min, max]: readonly [number, number]) =>
+        Math.min(max, Math.max(min, delta < 0 ? before : after));
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      const rangeX = room(dx, cx, window.innerWidth - cx, RANGE_LIMITS.x);
+      const rangeY = room(dy, cy, window.innerHeight - cy, RANGE_LIMITS.y);
+      const x = (Math.max(-1, Math.min(1, dx / rangeX)) + 1) * MIDDLE;
+      const y = (Math.max(-1, Math.min(1, dy / rangeY)) + 1) * MIDDLE;
+      lookAt(toIndex(y, target.row), toIndex(x, target.col));
       clearTimeout(returnTimer);
-      if (e.pointerType === "touch") returnTimer = setTimeout(() => moveTo(0, 0), TOUCH_RETURN_MS);
+      if (e.pointerType === "touch") returnTimer = setTimeout(() => lookAt(MIDDLE, MIDDLE), TOUCH_RETURN_MS);
     };
-    const center = () => moveTo(0, 0);
+    const center = () => lookAt(MIDDLE, MIDDLE);
 
     window.addEventListener("pointermove", onPointer, { passive: true });
     window.addEventListener("pointerdown", onPointer, { passive: true });
@@ -81,28 +126,28 @@ export function MascotFace({ size }: { size: number }) {
       window.removeEventListener("pointerdown", onPointer);
       document.documentElement.removeEventListener("pointerleave", center);
       window.removeEventListener("blur", center);
-      cancelAnimationFrame(frame);
+      clearTimeout(stepTimer);
       clearTimeout(returnTimer);
     };
-  }, []);
+  }, [size]);
+
+  // Before the sprite loads, both layers show the small front-facing frame.
+  const cell = size * ZOOM;
+  const initial: React.CSSProperties = {
+    backgroundImage: `url(${CENTER})`,
+    backgroundSize: `${cell}px ${cell}px`,
+    backgroundPosition: `${size / 2 - HEAD_CENTER_X * cell}px ${size / 2 - HEAD_CENTER_Y_BY_ROW[MIDDLE] * cell}px`,
+    backgroundRepeat: "no-repeat",
+  };
 
   return (
     <span
-      ref={ref}
       aria-hidden
-      className="relative inline-block shrink-0 overflow-hidden rounded-full border border-line bg-chip shadow-[0_0_14px_rgb(255_46_62/0.25)] [--lx:0] [--ly:0] [perspective:110px]"
+      className="relative inline-block shrink-0 overflow-hidden rounded-full border border-line bg-chip shadow-[0_0_14px_rgb(255_46_62/0.25)]"
       style={{ width: size, height: size }}
     >
-      <span className="absolute inset-0" style={HEAD_STYLE}>
-        <Image src="/mascot/face.webp" alt="" fill sizes={`${size * 2}px`} priority />
-        {LENSES.map(([left, top, right, bottom]) => (
-          <span
-            key={left}
-            className="absolute rounded-[30%]"
-            style={{ ...LENS_STYLE, left: `${left}%`, top: `${top}%`, width: `${right - left}%`, height: `${bottom - top}%` }}
-          />
-        ))}
-      </span>
+      <span ref={backRef} className="absolute inset-0 bg-no-repeat" style={initial} />
+      <span ref={frontRef} className="absolute inset-0 bg-no-repeat" style={initial} />
     </span>
   );
 }

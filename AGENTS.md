@@ -80,7 +80,8 @@ components/
   time/CompactCountdown.tsx, AiringProgress.tsx                 Client: ticket stub countdown (08س 40د 12ث) and progress line
 reference/
   prototype.html, designs/          Early HTML prototype and design mockups (not part of the app)
-  mascot/                           Original mascot art (white background) + cutout.cjs (regenerates public/mascot/*.webp) and face.cjs (regenerates face.webp)
+  mascot/                           Original mascot art (white background) + cutout.cjs (regenerates the pose WebPs)
+  mascot/look/                      The owner's 5×5 look-direction sheet + build-look.cjs (regenerates look.webp and look-center.webp)
 ```
 
 ## Rules
@@ -152,7 +153,7 @@ reference/
 - Five poses in `public/mascot/` (transparent WebP, cut out of the originals in `reference/mascot/` with `node reference/mascot/cutout.cjs`). Use `<Mascot pose=... height=... />`; it's decorative (`alt=""`), so the text beside it must carry the message.
 - Where each pose is used: `celebrate` = the add-to-list pop-up (fired from `useFavorites` via `FAVORITE_ADDED_EVENT`); `fix` = `app/error.tsx`; `confused` = no search results and `app/not-found.tsx`; `sleepy` = a day with no episodes and a show page with no announced episode; `cool` = empty قائمتي.
 - Keep it to these few moments; don't scatter the mascot across regular UI.
-- The header logo has `MascotFace`: the celebrating head in a round badge (`public/mascot/face.webp`). It watches the cursor: the head turns in 3D and each glowing lens's bright spot slides toward the cursor. The motion is driven by CSS variables `--lx/--ly` set in `requestAnimationFrame` (no React re-renders); on touch it follows the finger and re-centres after 2.5s; it's off with reduced motion. The lens boxes in `MascotFace.tsx` are measured from face.webp; re-measure them if the face crop changes.
+- The header logo has `MascotFace`: a round badge showing one of **25 drawn frames** of the mascot's head (the owner's 5×5 look-direction sheet; row = up→down, column = left→right from the viewer), chosen from the cursor's direction. It steps through in-between frames when the cursor jumps (55ms per frame) and crossfades each step (110ms), with hysteresis so it doesn't flicker at boundaries. The full-turn distance is measured per direction from the space to the screen edge (the face sits in a top corner). On touch it follows the finger and re-centres after 2.5s; it stays still with reduced motion. It shows the 5 KB `look-center.webp` first and loads the 115 KB `look.webp` sprite only on the first pointer event. Updates the DOM directly, with no React re-renders. Regenerate the sprite with `node reference/mascot/look/build-look.cjs` (it aligns frames on the shoulders).
 
 **SEO (target: Arabic-speaking countries)**
 - All SEO copy lives in `lib/site.ts`. The site URL comes from `NEXT_PUBLIC_SITE_URL`, falling back to Vercel's production URL. Search-console codes come from `GOOGLE_SITE_VERIFICATION` and `BING_SITE_VERIFICATION`.
