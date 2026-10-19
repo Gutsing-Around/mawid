@@ -1,14 +1,16 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- a plain Node (CommonJS) script, not app code */
 // Usage: node reference/mascot/look/build-look.cjs
-// Slices the 5×5 "look direction" sheet into 25 frames, removes the white background,
-// aligns every frame on the shoulders (so only the head moves when frames switch), and
-// packs them into public/mascot/look.webp: a 5×5 sprite with square cells (row = up→down,
-// column = left→right from the viewer), plus look-center.webp, the front frame on its own.
+// Slices the N×N "look direction" sheet into frames, removes the white background, aligns
+// every frame on the shoulders (so only the head moves when frames switch), and packs them
+// into public/mascot/look.webp: an N×N sprite with square cells (row = up→down, column =
+// left→right from the viewer), plus look-center.webp, the front frame on its own.
+// GRID must match components/MascotFace.tsx.
 const sharp = require("sharp");
 
-const SHEET = `${__dirname}/sheet-5x5.png`;
+const GRID = 9;
+const SHEET = `${__dirname}/sheet-${GRID}x${GRID}.png`;
 const OUT = process.argv[2] ?? `${__dirname}/../../../public/mascot`;
-const CELL = 104; // output cell size in px; the header shows the head at ~52px, so this is crisp on 2x screens
+const CELL = 84; // output cell size in px; the header shows a frame at ~53px, so this is crisp on 2x screens
 
 const isPaper = (r, g, b) => Math.min(r, g, b) >= 200 && Math.max(r, g, b) - Math.min(r, g, b) <= 30;
 
@@ -26,37 +28,42 @@ const isPaper = (r, g, b) => Math.min(r, g, b) >= 200 && Math.max(r, g, b) - Mat
       if (!on && start >= 0) { runs.push([start, i - 1]); start = -1; }
     }
     if (start >= 0) runs.push([start, to]);
-    return runs.filter(([a, b]) => b - a > 40);
+    return runs.filter(([a, b]) => b - a > 30);
   };
   const rows = bands(0, H - 1, (y) => { let n = 0; for (let x = 0; x < W; x++) n += ink(x, y); return n; });
-  if (rows.length !== 5) throw new Error(`expected 5 rows, found ${rows.length}`);
+  if (rows.length !== GRID) throw new Error(`expected ${GRID} rows, found ${rows.length}`);
 
   // Columns are evenly spaced, but hair spikes of neighbouring heads can touch, so instead of
   // looking for white gaps, cut at the line with the least ink near each expected boundary.
   const contentLeft = (() => { for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) if (ink(x, y)) return x; return 0; })();
   const contentRight = (() => { for (let x = W - 1; x >= 0; x--) for (let y = 0; y < H; y++) if (ink(x, y)) return x; return W - 1; })();
-  const pitch = (contentRight - contentLeft) / 5;
+  const pitch = (contentRight - contentLeft) / GRID;
+  const searchWidth = Math.round(pitch * 0.3);
   const cells = [];
   for (const [top, bottom] of rows) {
     const inkInColumn = (x) => { let n = 0; for (let y = top; y <= bottom; y++) n += ink(x, y); return n; };
     const cuts = [contentLeft - 1];
-    for (let k = 1; k < 5; k++) {
+    for (let k = 1; k < GRID; k++) {
       const expected = Math.round(contentLeft + k * pitch);
       let best = expected, bestInk = Infinity;
-      for (let x = expected - 45; x <= expected + 45; x++) { const n = inkInColumn(x); if (n < bestInk) { bestInk = n; best = x; } }
+      for (let x = expected - searchWidth; x <= expected + searchWidth; x++) { const n = inkInColumn(x); if (n < bestInk) { bestInk = n; best = x; } }
       cuts.push(best);
     }
     cuts.push(contentRight + 1);
-    for (let k = 0; k < 5; k++) cells.push({ left: cuts[k] + 1, right: cuts[k + 1] - 1, top, bottom });
+    for (let k = 0; k < GRID; k++) cells.push({ left: cuts[k] + 1, right: cuts[k + 1] - 1, top, bottom });
   }
 
   // Shoulder anchor per cell: the horizontal centre of the cloak's widest bottom rows and the
   // bottom edge. Aligning on it keeps the body still while the head turns.
+  // A row that touches the bottom edge of the sheet has its shoulders cut off; estimate its real
+  // shoulder line from the typical row height of the rows above it.
+  const fullHeights = rows.filter(([, b]) => b < H - 1).map(([t, b]) => b - t).slice(-3);
+  const typicalHeight = fullHeights.reduce((a, b) => a + b, 0) / fullHeights.length;
   for (const c of cells) {
     let sumX = 0, n = 0;
-    for (let y = c.bottom - 18; y <= c.bottom; y++) for (let x = c.left; x <= c.right; x++) if (ink(x, y)) { sumX += x; n++; }
+    for (let y = c.bottom - Math.round((c.bottom - c.top) * 0.08); y <= c.bottom; y++) for (let x = c.left; x <= c.right; x++) if (ink(x, y)) { sumX += x; n++; }
     c.anchorX = sumX / n;
-    c.anchorY = c.bottom;
+    c.anchorY = c.bottom >= H - 1 ? Math.round(c.top + typicalHeight) : c.bottom;
   }
 
   // One shared crop window (relative to the anchor) that fits every cell's head.
@@ -102,11 +109,11 @@ const isPaper = (r, g, b) => Math.min(r, g, b) >= 200 && Math.max(r, g, b) - Mat
     tiles.push(await sharp(buf, { raw: { width: size, height: size, channels: 4 } }).resize(CELL, CELL).png().toBuffer());
   }
 
-  await sharp({ create: { width: CELL * 5, height: CELL * 5, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
-    .composite(tiles.map((input, i) => ({ input, left: (i % 5) * CELL, top: Math.floor(i / 5) * CELL })))
-    .webp({ quality: 78, alphaQuality: 85, effort: 6 })
+  await sharp({ create: { width: CELL * GRID, height: CELL * GRID, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+    .composite(tiles.map((input, i) => ({ input, left: (i % GRID) * CELL, top: Math.floor(i / GRID) * CELL })))
+    .webp({ quality: 70, alphaQuality: 80, effort: 6 })
     .toFile(`${OUT}/look.webp`);
   // The front-facing frame on its own: shown immediately, before the sprite is loaded.
-  await sharp(tiles[12]).webp({ quality: 82, alphaQuality: 88, effort: 6 }).toFile(`${OUT}/look-center.webp`);
+  await sharp(tiles[Math.floor((GRID * GRID) / 2)]).webp({ quality: 82, alphaQuality: 88, effort: 6 }).toFile(`${OUT}/look-center.webp`);
   console.log(`window ${size}px → ${CELL}px cells; anchors x:`, cells.map((c) => Math.round(c.anchorX)).join(","));
 })();

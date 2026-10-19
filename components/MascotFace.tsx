@@ -2,12 +2,12 @@
 
 import { useEffect, useRef } from "react";
 
-/** The look sprite: 5×5 frames, row = looking up → down, column = looking left → right (viewer's side). */
+/** The look sprite: 9×9 frames, row = looking up → down, column = looking left → right (viewer's side). */
 const SPRITE = "/mascot/look.webp";
 /** The front-facing frame alone, shown until the sprite has loaded. */
 const CENTER = "/mascot/look-center.webp";
-const GRID = 5;
-const MIDDLE = 2;
+const GRID = 9; // must match reference/mascot/look/build-look.cjs
+const MIDDLE = (GRID - 1) / 2;
 const LAST = GRID - 1;
 
 /**
@@ -16,8 +16,10 @@ const LAST = GRID - 1;
  * outer side. Reaching the screen edge in any direction turns it all the way, within these limits.
  */
 const RANGE_LIMITS = { x: [70, 650], y: [34, 480] } as const;
-/** How quickly the head glides to the next drawn frame (ms; lower = snappier). */
-const FOLLOW_MS = 75;
+/** How quickly the head turns toward the cursor (ms; lower = snappier, higher = floatier). */
+const FOLLOW_MS = 85;
+/** Crossfade between two consecutive drawn frames. */
+const CROSSFADE_MS = 70;
 /** How far past a frame boundary the cursor must go before switching back (prevents flicker). */
 const HYSTERESIS = 0.15;
 /** Phones have no cursor: after a touch, the face looks back to the front after this long. */
@@ -26,26 +28,32 @@ const TOUCH_RETURN_MS = 2500;
  * Continuous drift (px) of the whole head with the cursor: a little overall, plus a little within
  * the current frame, so small mouse movements move the head smoothly between drawn angles.
  */
-const DRIFT = { overall: 1.4, withinFrame: 2.2 };
+const DRIFT = { overall: 1.4, withinFrame: 1.3 };
 
 /** Each frame is shown a bit larger than the badge, so the head (not the shoulders) fills the circle. */
 const ZOOM = 1.32;
 /** Where the head's centre sits inside a frame (fraction of the frame); lower when looking down. */
 const HEAD_CENTER_X = 0.5;
-const HEAD_CENTER_Y_BY_ROW = [0.42, 0.43, 0.44, 0.47, 0.5];
+const HEAD_CENTER_Y = { up: 0.42, level: 0.44, down: 0.5 };
+const HEAD_CENTER_Y_BY_ROW = Array.from({ length: GRID }, (_, row) => {
+  const t = (row - MIDDLE) / MIDDLE; // -1 (up) … 0 (level) … 1 (down)
+  return t < 0
+    ? HEAD_CENTER_Y.level + t * (HEAD_CENTER_Y.level - HEAD_CENTER_Y.up)
+    : HEAD_CENTER_Y.level + t * (HEAD_CENTER_Y.down - HEAD_CENTER_Y.level);
+});
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
 /**
  * The mascot beside the logo, watching the cursor.
  *
- * The head always settles on one of the 25 drawn frames (the one nearest the cursor's
- * direction), so at rest it's a clean drawing, never a double image. Moving between frames, it
- * glides: the drawn point eases toward the new frame (frame-rate independent smoothing) and the
- * 4 nearest frames are blended by distance for that split second. Meanwhile the whole head
- * drifts a couple of pixels continuously with the cursor, so small movements feel fluid. Four stacked layers are updated
- * directly in requestAnimationFrame (no React re-renders), only while moving. On touch it
- * follows the finger; with reduced motion it stays still. The 115 KB sprite loads on the first
+ * A point on the 9×9 grid of drawn frames eases toward the cursor's direction (frame-rate
+ * independent smoothing), and the face shows the single drawn frame nearest that point,
+ * crossfading 70ms between consecutive frames: a flipbook of 81 hand-drawn angles, so the turn
+ * is smooth and always a clean drawing (no blended double images). The whole head also drifts
+ * a pixel or two continuously with the cursor, so small movements feel fluid. Two stacked layers are
+ * updated directly in requestAnimationFrame (no React re-renders), only while moving. On touch it
+ * follows the finger; with reduced motion it stays still. The ~220 KB sprite loads on the first
  * pointer event; a 5 KB front frame shows until then.
  */
 export function MascotFace({ size }: { size: number }) {
@@ -55,7 +63,7 @@ export function MascotFace({ size }: { size: number }) {
   useEffect(() => {
     const head = headRef.current;
     const layers = layerRefs.current.filter((l): l is HTMLSpanElement => l !== null);
-    if (!head || layers.length !== 4 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!head || layers.length !== 2 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     const cell = size * ZOOM;
     const offsetX = size / 2 - HEAD_CENTER_X * cell;
@@ -64,7 +72,7 @@ export function MascotFace({ size }: { size: number }) {
       el.style.backgroundPosition = `${offsetX - col * cell}px ${offsetY - row * cell}px`;
     };
 
-    // pos: the blended point being drawn; goal: the drawn frame it settles on (always whole
+    // pos: the eased point (the frame nearest it is shown); goal: the frame it settles on (whole
     // numbers, so at rest there's never a double image); raw: the exact cursor-derived point.
     const pos = { x: MIDDLE, y: MIDDLE };
     const goal = { x: MIDDLE, y: MIDDLE };
@@ -76,27 +84,21 @@ export function MascotFace({ size }: { size: number }) {
     let last = 0;
     let returnTimer: ReturnType<typeof setTimeout> | undefined;
 
-    // Blend the 4 frames around the current point. With "over" compositing, layer k gets
-    // opacity = its weight / (sum of weights so far), which yields exactly the bilinear weights.
+    // Flipbook: always show the single drawn frame nearest the eased point. Neighbouring frames
+    // differ so little that stepping through them reads as animation; a 70ms crossfade between
+    // consecutive frames smooths each step without the double image that blending 4 frames gave.
+    const [back, front] = layers;
+    const shown = { row: MIDDLE, col: MIDDLE };
     const render = () => {
-      const x = clamp(pos.x, 0, LAST);
-      const y = clamp(pos.y, 0, LAST);
-      const col = Math.min(LAST - 1, Math.floor(x));
-      const row = Math.min(LAST - 1, Math.floor(y));
-      const fx = x - col;
-      const fy = y - row;
-      const cells: [number, number, number][] = [
-        [row, col, (1 - fx) * (1 - fy)],
-        [row, col + 1, fx * (1 - fy)],
-        [row + 1, col, (1 - fx) * fy],
-        [row + 1, col + 1, fx * fy],
-      ];
-      let sum = 0;
-      cells.forEach(([r, c, weight], k) => {
-        sum += weight;
-        paint(layers[k], r, c);
-        layers[k].style.opacity = k === 0 ? "1" : sum > 0 ? (weight / sum).toFixed(3) : "0";
-      });
+      const row = Math.round(clamp(pos.y, 0, LAST));
+      const col = Math.round(clamp(pos.x, 0, LAST));
+      if (row !== shown.row || col !== shown.col) {
+        paint(back, shown.row, shown.col);
+        paint(front, row, col);
+        front.animate([{ opacity: 0 }, { opacity: 1 }], { duration: CROSSFADE_MS, easing: "ease-out" });
+        shown.row = row;
+        shown.col = col;
+      }
       head.style.transform = `translate(${drift.x.toFixed(2)}px, ${drift.y.toFixed(2)}px)`;
     };
 
@@ -136,9 +138,11 @@ export function MascotFace({ size }: { size: number }) {
       const img = new Image();
       img.onload = () => {
         spriteReady = true;
-        for (const layer of layers) {
+        for (const layer of [back, front]) {
           layer.style.backgroundImage = `url(${SPRITE})`;
           layer.style.backgroundSize = `${cell * GRID}px ${cell * GRID}px`;
+          layer.style.opacity = "1";
+          paint(layer, shown.row, shown.col);
         }
         render();
         frame = requestAnimationFrame(tick);
@@ -195,7 +199,7 @@ export function MascotFace({ size }: { size: number }) {
       {/* Breathing: a very slow, tiny rise and fall so the face never looks frozen. */}
       <span className="absolute inset-0 animate-[breathe_3.8s_ease-in-out_infinite_alternate] motion-reduce:animate-none">
         <span ref={headRef} className="absolute inset-0 will-change-transform">
-          {[0, 1, 2, 3].map((k) => (
+          {[0, 1].map((k) => (
             <span
               key={k}
               ref={(el) => {
