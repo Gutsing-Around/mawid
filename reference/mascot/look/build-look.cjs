@@ -17,7 +17,7 @@ const ROWS_PER_SHEET = 4;
  * the height of the glasses above the shoulders), from looking furthest up to looking down;
  * "b3" = sheet b, row 3.
  */
-const ROW_ORDER = ["b1", "a1", "a2", "b2", "a3", "b3", "a4", "b4"];
+const ROW_ORDER = ["b1", "a1", "b2", "a2", "a3", "b3", "a4", "b4"];
 const LEVEL_ROW = ROW_ORDER.indexOf("b3"); // looking straight ahead
 const OUT = process.argv[2] ?? `${__dirname}/../../../public/mascot`;
 const CELL = 96; // output cell size in px; the header shows a frame at ~53px, so this is crisp on 2x screens
@@ -62,10 +62,10 @@ const CELL = 96; // output cell size in px; the header shows a frame at ~53px, s
       cells[`${key}${r + 1}`] = Array.from({ length: COLS }, (_, k) => ({ sheet: key, left: cuts[k] + 1, right: cuts[k + 1] - 1, top, bottom }));
     });
   }
-
-  // Cut each frame out: only its own cell's pixels, keeping the figure and the parts connected to
-  // it (a neighbour's hair tip crossing the cut, or a stray speck, is dropped).
-  const frames = ROW_ORDER.flatMap((id) => cells[id]).map((c) => {
+  // Cut each frame out: only its own cell's pixels, and only the figure itself (the largest
+  // connected shape) plus its soft anti-aliased edge. A neighbour's hair tip crossing the cut, or
+  // any stray speck, is dropped.
+  const cutOut = (c) => {
     const { data, W, ink } = sheets[c.sheet];
     const w = c.right - c.left + 1, h = c.bottom - c.top + 1;
     const label = new Int32Array(w * h).fill(-1);
@@ -83,33 +83,83 @@ const CELL = 96; // output cell size in px; the header shows a frame at ~53px, s
       }
       sizes.push(size);
     }
-    const keep = sizes.map((s) => s >= Math.max(...sizes) * 0.03);
+    const figure = sizes.indexOf(Math.max(...sizes));
     const buf = Buffer.alloc(w * h * 4);
-    let minY = h, maxY = 0;
     for (let k = 0; k < w * h; k++) {
       const x = k % w, y = (k / w) | 0, i = ((c.top + y) * W + c.left + x) * 4;
-      // Faint anti-aliasing next to a kept part stays; everything else outside the figure is cleared.
-      const near = label[k] >= 0 ? keep[label[k]] : [k - 1, k + 1, k - w, k + w].some((n) => n >= 0 && n < w * h && label[n] >= 0 && keep[label[n]]);
-      if (!near || data[i + 3] < 16) continue;
-      data.copy(buf, k * 4, i, i + 4);
-      minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+      const onFigure = label[k] === figure ||
+        (label[k] < 0 && [k - 1, k + 1, k - w, k + w].some((n) => n >= 0 && n < w * h && label[n] === figure));
+      if (onFigure && data[i + 3] >= 16) data.copy(buf, k * 4, i, i + 4);
     }
-    // Shoulder anchor: the centre of the cloak's bottom rows and the bottom edge. Aligning on it
-    // keeps the body still while the head turns.
-    let sumX = 0, n = 0;
-    for (let y = maxY - Math.round((maxY - minY) * 0.08); y <= maxY; y++) for (let x = 0; x < w; x++) if (buf[(y * w + x) * 4 + 3] > 40) { sumX += x; n++; }
-    return { buf, w, h, anchorX: sumX / n, anchorY: maxY, height: maxY - minY };
-  });
+    return { buf, w, h };
+  };
 
-  // One shared square window (relative to the anchor) that fits every frame.
-  const size = Math.max(...frames.map((f) => Math.max(f.w, f.height))) + 8;
-  const tiles = await Promise.all(frames.map((f) => {
-    const left = Math.round(size / 2 - f.anchorX), top = Math.round(size - 4 - f.anchorY);
-    return sharp({ create: { width: size, height: size, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
-      .composite([{ input: f.buf, raw: { width: f.w, height: f.h, channels: 4 }, left, top }])
+  // Bounds of the opaque figure, and the cloak's width a little above its bottom edge.
+  const measure = ({ buf, w, h }) => {
+    let minY = h, maxY = 0;
+    for (let k = 0; k < w * h; k++) if (buf[k * 4 + 3] > 128) { const y = (k / w) | 0; minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+    const y = maxY - Math.round((maxY - minY) * 0.1);
+    let left = w, right = 0;
+    for (let x = 0; x < w; x++) if (buf[(y * w + x) * 4 + 3] > 128) { left = Math.min(left, x); right = Math.max(right, x); }
+    return { minY, maxY, cloakWidth: right - left };
+  };
+
+  // The rows weren't all drawn at the same size (the looking-down rows are ~6% bigger), so every
+  // row is scaled to the same cloak width: otherwise the head swells and shrinks as it turns.
+  const median = (list) => [...list].sort((a, b) => a - b)[list.length >> 1];
+  const cutRows = ROW_ORDER.map((id) => cells[id].map(cutOut));
+  const rowWidths = cutRows.map((row) => median(row.map((f) => measure(f).cloakWidth)));
+  const targetWidth = median(rowWidths);
+  const frames = [];
+  for (const [r, row] of cutRows.entries()) {
+    const scale = targetWidth / rowWidths[r];
+    for (const f of row) {
+      const w = Math.round(f.w * scale), h = Math.round(f.h * scale);
+      const buf = await sharp(f.buf, { raw: { width: f.w, height: f.h, channels: 4 } }).resize(w, h).raw().toBuffer();
+      const m = measure({ buf, w, h });
+      // Shoulder anchor: the centre of the cloak's bottom rows and the bottom edge.
+      let sumX = 0, n = 0;
+      for (let y = m.maxY - Math.round((m.maxY - m.minY) * 0.08); y <= m.maxY; y++) for (let x = 0; x < w; x++) if (buf[(y * w + x) * 4 + 3] > 128) { sumX += x; n++; }
+      frames.push({ buf, w, h, anchorX: sumX / n, anchorY: m.maxY, height: m.maxY - m.minY });
+    }
+  }
+
+  // One shared square window that fits every frame (with room for the alignment shifts below).
+  const SHIFT = { x: 10, y: 6 };
+  const size = Math.max(...frames.map((f) => Math.max(f.w, f.height))) + 2 * SHIFT.x + 8;
+  const place = (f) => ({ left: Math.round(size / 2 - f.anchorX), top: Math.round(size - 4 - SHIFT.y - f.anchorY) });
+  const alphaIn = (f, left, top, x, y) => {
+    const fx = x - left, fy = y - top;
+    return fx < 0 || fy < 0 || fx >= f.w || fy >= f.h ? 0 : f.buf[(fy * f.w + fx) * 4 + 3];
+  };
+
+  // Align every frame on the cloak of the level, front-facing frame: try small shifts around the
+  // shoulder anchor and keep the one where the cloaks overlap best. The body then stays exactly
+  // still and only the head turns.
+  const reference = frames[LEVEL_ROW * COLS + (COLS - 1) / 2];
+  const ref = place(reference);
+  const bandTop = ref.top + reference.anchorY - Math.round(reference.height * 0.28);
+  const bandBottom = ref.top + reference.anchorY;
+  for (const f of frames) {
+    const start = place(f);
+    let best = { cost: Infinity, left: start.left, top: start.top };
+    for (let dy = -SHIFT.y; dy <= SHIFT.y; dy++) for (let dx = -SHIFT.x; dx <= SHIFT.x; dx++) {
+      let cost = 0;
+      for (let y = bandTop; y <= bandBottom; y += 2) for (let x = 0; x < size; x += 2) {
+        cost += Math.abs(alphaIn(f, start.left + dx, start.top + dy, x, y) - alphaIn(reference, ref.left, ref.top, x, y));
+      }
+      if (cost < best.cost) best = { cost, left: start.left + dx, top: start.top + dy };
+    }
+    f.left = best.left;
+    f.top = best.top;
+  }
+
+  const tiles = await Promise.all(frames.map((f) =>
+    sharp({ create: { width: size, height: size, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+      .composite([{ input: f.buf, raw: { width: f.w, height: f.h, channels: 4 }, left: f.left, top: f.top }])
       .png().toBuffer()
-      .then((square) => sharp(square).resize(CELL, CELL).png().toBuffer());
-  }));
+      .then((square) => sharp(square).resize(CELL, CELL).png().toBuffer()),
+  ));
 
   const rows = ROW_ORDER.length;
   await sharp({ create: { width: CELL * COLS, height: CELL * rows, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
@@ -118,5 +168,5 @@ const CELL = 96; // output cell size in px; the header shows a frame at ~53px, s
     .toFile(`${OUT}/look.webp`);
   // The level, front-facing frame on its own: shown immediately, before the sprite is loaded.
   await sharp(tiles[LEVEL_ROW * COLS + (COLS - 1) / 2]).webp({ quality: 82, alphaQuality: 88, effort: 6 }).toFile(`${OUT}/look-center.webp`);
-  console.log(`${COLS}×${rows} frames, window ${size}px → ${CELL}px cells, level row ${LEVEL_ROW}`);
+  console.log(`${COLS}×${rows} frames, window ${size}px → ${CELL}px cells, level row ${LEVEL_ROW}, row scales`, rowWidths.map((w) => (targetWidth / w).toFixed(3)).join(" "));
 })();
