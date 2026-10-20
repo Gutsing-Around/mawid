@@ -10,6 +10,7 @@ import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { Mascot } from "@/components/Mascot";
 import { PlatformLogos } from "@/components/PlatformLogos";
+import { ShareButton } from "@/components/ShareButton";
 import { CountdownBoxes } from "@/components/schedule/CountdownBoxes";
 import { ScheduleProvider } from "@/components/schedule/ScheduleProvider";
 import { LocalTime } from "@/components/time/LocalTime";
@@ -17,6 +18,7 @@ import type { ShowPageData } from "@/lib/anilist";
 import { episodeLabel } from "@/lib/format";
 import { genreLabel } from "@/lib/genres";
 import { favoriteOf } from "@/lib/schedule";
+import { showShareText } from "@/lib/share";
 import { SITE } from "@/lib/site";
 
 /** A show's own page: next episode countdown, story, where to watch, reminder and favourite. */
@@ -116,6 +118,7 @@ export function ShowPage({ data, path }: { data: ShowPageData; path: string }) {
               {next && (
                 <ReminderButton title={show.title} episode={next.episode} airingAt={next.airingAt} path={path} />
               )}
+              <ShareButton path={path} text={showShareText(show, next?.episode ?? null)} />
             </div>
           </div>
         </div>

@@ -22,7 +22,7 @@ Stack: Next.js 16 App Router (`cacheComponents: true`), React 19, TypeScript, Ta
 - `/anime/[slug]`: a **show page** per show (`showPath()`: readable slug + AniList media ID, e.g. `/anime/black-clover-season-2-195604`). Hero with art, Arabic + English titles, countdown, favourite and reminder buttons; the story; platform logos; TVSeries JSON-LD and per-show metadata. Shows airing this week are prerendered from the cached schedule (no extra AniList requests); other IDs are fetched on first visit and cached; outdated slugs redirect; unknown IDs 404.
 - `/my-list`: **قائمتي**, the visitor's favourite shows with their next episode. Not indexed.
 - `/review`: an unlinked page for the owner (`noindex, nofollow`). It lists every show airing this week and whether its Arabic name and synopsis are checked (data files), automatic (Claude) or missing, plus the automatic names as ready-to-paste lines for `data/titles-ar.ts`.
-- Clicking a card, or "التفاصيل والقصة" in a hero, opens a **details popup**: art, Arabic title, genres, episode info, the synopsis with its official source, platform logos, favourite and reminder buttons, and a link to the show page. Card links are real `<a href>`s to the show page (crawlable; Ctrl/middle-click opens the page), and a plain click opens the popup instead.
+- Clicking a card, or "التفاصيل والقصة" in a hero, opens a **details popup**: art, Arabic title, genres, episode info, the synopsis with its official source, platform logos, favourite, reminder and share buttons, and a link to the show page. Card links are real `<a href>`s to the show page (crawlable; Ctrl/middle-click opens the page), and a plain click opens the popup instead.
 
 ## Structure
 
@@ -47,6 +47,7 @@ lib/
   schedule.ts       toSummary, matchesFilters (the one filter rule), genre/platform option lists
   genres.ts         AniList genre → Arabic lookup; Ecchi is flagged as mature (red)
   platforms.ts      Platform → brand colour + logo path (Simple Icons, CC0) or wordmark; generated logo data
+  share.ts          Share targets (links, brand colours, generated Simple Icons logos) and the Arabic share messages
   format.ts         Arabic counting rules, countdown/clock text, Intl formatters, local day keys
 data/
   titles-ar.ts      Checked Arabic show names (these win over automatic names)
@@ -65,6 +66,7 @@ components/
   PlatformLogos.tsx                 Brand logo tiles linking to official streaming pages
   Mascot.tsx                        The mascot (5 poses) as a decorative next/image
   MascotFace.tsx                    Client: round mascot face beside the logo that watches the cursor
+  ShareButton.tsx                   Client: share menu (WhatsApp, Telegram, X, copy link; the native share sheet on phones)
   FavoriteToast.tsx                 Client: "أُضيف إلى قائمتي!" pop-up with the celebrating mascot
   schedule/SchedulePage.tsx         Server: shared page for both layouts; renders every card + its details
   schedule/ScheduleProvider.tsx     Client context: filters, selected day, visibleIds, nextId, open popup
@@ -118,6 +120,7 @@ reference/
 - Search also matches Arabic titles.
 - Filtering (search, genre, platform) goes through `matchesFilters` in `lib/schedule.ts`, so cards, tab counts, the hero and the empty state always agree.
 - Show pages read data with `getShow(mediaId)`: from the cached schedule when the show airs this week, otherwise one cached AniList `Media` query. Build show URLs only with `showPath()`; `mediaIdFromSlug()` reads the ID back.
+- Sharing (`ShareButton`) is client-only: on touch devices with `navigator.share` it opens the system share sheet; otherwise a menu of `SHARE_TARGETS` (WhatsApp first) plus copy link. The link is built from `window.location.origin` at click time. It's on the popup and show page (`showShareText`: Arabic name, next episode) and in the footer (`SITE_SHARE_TEXT`, shares `/`).
 - Reminders (`ReminderButton`) are client-only: a prefilled Google Calendar link and a downloadable .ics (UTC times, 10-minute alert). No server or accounts.
 - Favourites are stored as `FavoriteShow` objects (media ID, title, cover, colour), so `/my-list` can list shows even when they aren't airing this week. Use `useFavorites()`; don't read the key directly.
 

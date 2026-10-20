@@ -1,9 +1,11 @@
 import Image from "next/image";
 import { PlatformLogos } from "@/components/PlatformLogos";
+import { ShareButton } from "@/components/ShareButton";
 import { Countdown } from "@/components/time/Countdown";
 import { LocalTime } from "@/components/time/LocalTime";
 import { episodeLabel } from "@/lib/format";
 import { favoriteOf, showPath } from "@/lib/schedule";
+import { showShareText } from "@/lib/share";
 import type { Episode } from "@/lib/types";
 import { FavoriteButton } from "./FavoriteButton";
 import { GenreTags } from "./GenreTags";
@@ -14,7 +16,7 @@ import { SynopsisBlock } from "./SynopsisBlock";
 
 /**
  * Content of the details popup: art, genres, the synopsis with its official source, where
- * to watch, a reminder and a link to the full show page. Rendered in the browser from the
+ * to watch, a reminder, sharing and a link to the full show page. Rendered in the browser from the
  * episode data the page already has, so no per-show HTML is sent up front.
  */
 export function ShowDetails({ episode: ep }: { episode: Episode }) {
@@ -83,6 +85,7 @@ export function ShowDetails({ episode: ep }: { episode: Episode }) {
         <div className="flex flex-wrap items-center gap-2.5">
           <FavoriteButton show={favoriteOf(ep)} variant="full" />
           <ReminderButton title={ep.title} episode={ep.episode} airingAt={ep.airingAt} path={path} />
+          <ShareButton path={path} text={showShareText(ep, ep.episode)} opens="up" />
           <a href={path} className="ms-auto text-sm font-semibold text-accent hover:underline">
             صفحة العمل ←
           </a>

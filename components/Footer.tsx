@@ -1,3 +1,5 @@
+import { SITE_SHARE_TEXT } from "@/lib/share";
+import { ShareButton } from "./ShareButton";
 import { TimeZoneNote } from "./time/TimeZoneNote";
 
 export function Footer() {
@@ -20,6 +22,10 @@ export function Footer() {
           AniList
         </a>
       </span>
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <span className="text-ink/80">أعجبك الموقع؟ شاركه مع أصدقائك.</span>
+        <ShareButton path="/" text={SITE_SHARE_TEXT} label="شارك الموقع" opens="up" />
+      </div>
     </footer>
   );
 }
